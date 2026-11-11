@@ -1,5 +1,5 @@
 import type { ProficiencyLevel, SkillCustom, SkillName } from '@cw/model';
-import { abilityFromStatId, arr, type Raw } from './raw';
+import { abilityFromStatId, arr, own, type Raw } from './raw';
 
 /** characterValues rows whose valueTypeId is this are per-skill customisations. */
 const SKILL_ENTITY_TYPE = '1958004211';
@@ -23,11 +23,11 @@ export function convertSkillCustom(d: Raw): Partial<Record<SkillName, SkillCusto
   const out: Partial<Record<SkillName, SkillCustom>> = {};
   for (const v of arr(d.characterValues)) {
     if (String(v?.valueTypeId) !== SKILL_ENTITY_TYPE) continue;
-    const skill = SKILL_IDS[String(v?.valueId)];
+    const skill = own(SKILL_IDS, v?.valueId);
     if (!skill) continue;
     const entry = (out[skill] ??= {});
     if (v.typeId === PROFICIENCY_LEVEL_TYPE) {
-      const level = PROFICIENCY_LEVELS[v.value as number];
+      const level = own(PROFICIENCY_LEVELS, v.value);
       if (level) entry.proficiency = level;
     } else if (v.typeId === ABILITY_OVERRIDE_TYPE) {
       const ability = abilityFromStatId(v.value);

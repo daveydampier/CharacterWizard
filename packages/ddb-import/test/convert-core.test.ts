@@ -85,6 +85,14 @@ describe('skill customisations', () => {
     expect(custom.investigation).toEqual({ proficiency: 'expertise', ability: 'cha' });
     expect(custom.perception).toEqual({ proficiency: 'expertise' });
   });
+
+  it('treats skill IDs and proficiency levels named like Object.prototype members as unknown', () => {
+    const row = (valueId: unknown, typeId: number, value: unknown) => ({ valueTypeId: '1958004211', valueId, typeId, value });
+    const custom = convertCharacter({
+      data: { characterValues: [row('constructor', 26, 4), row('toString', 27, 1), row('6', 26, 'constructor')] },
+    }).skillCustom;
+    expect(custom).toEqual({ arcana: {} });
+  });
 });
 
 describe('unknown input', () => {

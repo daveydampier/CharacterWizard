@@ -1,6 +1,6 @@
 import type { Armor, ChargedItem, DamagePart, Weapon } from '@cw/model';
 import { activeItemIds } from './modifiers';
-import { arr, limitedUseFrom, num, obj, slug, str, type Raw } from './raw';
+import { arr, limitedUseFrom, num, obj, own, slug, str, type Raw } from './raw';
 
 /** characterValues rows with this typeId and value true mark an inventory item as a pact weapon. */
 const PACT_WEAPON_TYPE = 28;
@@ -97,7 +97,7 @@ export function convertArmor(d: Raw): Armor[] {
     if (item?.equipped !== true) continue;
     const def = obj(item.definition);
     if (def.filterType !== 'Armor') continue;
-    const kind = ARMOR_KINDS[def.armorTypeId as number];
+    const kind = own(ARMOR_KINDS, def.armorTypeId);
     const baseAc = num(def.armorClass);
     if (!kind || baseAc === null) continue;
     out.push({ name: str(def.name), kind, baseAc });

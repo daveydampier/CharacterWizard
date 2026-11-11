@@ -9,6 +9,12 @@ export const str = (v: unknown): string => (typeof v === 'string' ? v : '');
 export const obj = (v: unknown): Raw =>
   v !== null && typeof v === 'object' && !Array.isArray(v) ? (v as Raw) : {};
 
+/** table[key], looking only at the table's own properties, so "constructor" is not found. */
+export function own<K extends PropertyKey, T>(table: Record<K, T>, key: unknown): T | undefined {
+  const k = String(key);
+  return Object.hasOwn(table, k) ? (table as Record<string, T>)[k] : undefined;
+}
+
 const STAT_IDS: Record<number, AbilityName> = {
   1: 'str', 2: 'dex', 3: 'con', 4: 'int', 5: 'wis', 6: 'cha',
 };

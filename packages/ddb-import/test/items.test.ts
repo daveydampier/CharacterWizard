@@ -70,6 +70,13 @@ describe('armour', () => {
     expect(armor).toContainEqual({ name: 'Adamantine Breastplate', kind: 'medium', baseAc: 14 });
     expect(armor).toContainEqual({ name: 'Mr Bungle', kind: 'shield', baseAc: 2 });
   });
+
+  it('treats an armour type named like an Object.prototype member as unknown', () => {
+    const inventory = ['constructor', 'toString', 1].map((armorTypeId) => ({
+      equipped: true, definition: { name: `Armour ${armorTypeId}`, filterType: 'Armor', armorTypeId, armorClass: 12 },
+    }));
+    expect(convertCharacter({ data: { inventory } }).armor).toEqual([{ name: 'Armour 1', kind: 'light', baseAc: 12 }]);
+  });
 });
 
 describe('weapon attunement', () => {
