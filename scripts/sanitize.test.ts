@@ -29,6 +29,36 @@ describe('sanitize', () => {
     expect(input.data.username).toBe('someone');
   });
 
+  it('removes prose under other free-text keys', () => {
+    const text = {
+      summary: 'a', highlights: 'b', iconicGear: 'c', details: 'd', tagline: 'e', subclassFlavorText: 'f', exception: 'g',
+    };
+    const out = sanitize({ data: { classes: [{ definition: { ...text, name: 'Wizard' } }], summary: '', details: null } }) as any;
+    expect(out.data.classes[0].definition).toEqual({
+      summary: '[removed]', highlights: '[removed]', iconicGear: '[removed]', details: '[removed]',
+      tagline: '[removed]', subclassFlavorText: '[removed]', exception: '[removed]', name: 'Wizard',
+    });
+    expect(out.data).toMatchObject({ summary: '', details: null });
+  });
+
+  it('removes personal data from a bare character object', () => {
+    const out = sanitize({
+      id: 5, name: 'Test', username: 'someone', userId: 123, campaign: { id: 9 }, notes: { backstory: 'private' },
+    }) as any;
+    expect(out).toEqual({ id: 5, name: 'Test', username: 'redacted', userId: 0, campaign: null, notes: null });
+  });
+
+  it('clears notes on custom items and character values', () => {
+    const out = sanitize({
+      data: {
+        customItems: [{ name: 'Twig', notes: 'my note' }, { name: 'Rock', notes: null }],
+        characterValues: [{ typeId: 26, value: 4, notes: 'why' }],
+      },
+    }) as any;
+    expect(out.data.customItems).toEqual([{ name: 'Twig', notes: null }, { name: 'Rock', notes: null }]);
+    expect(out.data.characterValues).toEqual([{ typeId: 26, value: 4, notes: null }]);
+  });
+
   it.each(SLUGS)('leaves an already clean fixture unchanged: %s', (slug) => {
     const raw = loadRaw(slug);
     expect(sanitize(raw)).toEqual(raw);

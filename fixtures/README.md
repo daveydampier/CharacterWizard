@@ -2,7 +2,7 @@
 
 Real characters used as examples to test the converter and the sheet maths. The app is not built for these characters; they exist to prove the general rules against known-correct numbers.
 
-- `characters/<slug>.json`: a D&D Beyond character response after `scripts/sanitize.ts`. Usernames, user IDs, campaign, portraits, backstory and all rules text are removed.
+- `characters/<slug>.json`: a D&D Beyond character response after `scripts/sanitize.ts`. The username and user ID are replaced, and the campaign, decorations (portraits and avatars), notes (backstory), traits and social name are set to `null`, as are all avatar URLs and the `notes` on custom items and character values. Every non-empty string under a key ending in `description` or `snippet`, or under `summary`, `highlights`, `iconicGear`, `details`, `tagline`, `subclassFlavorText` or `exception`, becomes `"[removed]"`. The character's ID, name and other descriptive fields are kept.
 - `expected/<slug>.json`: the numbers D&D Beyond's own sheet showed for that character on the date in the file's `source` field. Spell slot counts come from the class table.
 
 ## Adding a fixture
