@@ -11,6 +11,10 @@ describe('mapDdbTags', () => {
     expect(mapDdbTags(['Combat'])).toEqual([]);
     expect(mapDdbTags(['Summoning', 'Never Seen Before'])).toEqual(['utility']);
   });
+
+  it('treats tag names that exist on Object.prototype as unknown', () => {
+    expect(mapDdbTags(['constructor', 'toString', '__proto__', 'hasOwnProperty'])).toEqual(['utility']);
+  });
 });
 
 describe('buildAbilities: vlad', () => {

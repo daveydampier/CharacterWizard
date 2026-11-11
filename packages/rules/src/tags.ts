@@ -17,7 +17,7 @@ const DDB_TAGS: Record<string, Tag | null> = {
 export function mapDdbTags(tags: string[]): Tag[] {
   const out: Tag[] = [];
   for (const raw of tags) {
-    const mapped = raw in DDB_TAGS ? DDB_TAGS[raw] : 'utility';
+    const mapped = Object.hasOwn(DDB_TAGS, raw) ? DDB_TAGS[raw] : 'utility';
     if (mapped && !out.includes(mapped)) out.push(mapped);
   }
   return out;
