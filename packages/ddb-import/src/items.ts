@@ -32,12 +32,14 @@ export function convertWeapons(d: Raw): Weapon[] {
   for (const item of arr(d.inventory)) {
     if (item?.equipped !== true) continue;
     const def = obj(item.definition);
+    // Granted modifiers only apply when the item is attuned, if it needs attunement.
+    const effective = !(def.canAttune === true && item.isAttuned !== true);
     const shared = {
       key: `item:${num(def.id) ?? 0}:base`,
       name: str(def.name),
-      magicBonus: grantedBonus(def, 'magic'),
+      magicBonus: effective ? grantedBonus(def, 'magic') : 0,
       isPactWeapon: pact.has(String(item.id)),
-      extraDamage: extraDamage(def),
+      extraDamage: effective ? extraDamage(def) : [],
       uses: limitedUseFrom(item.limitedUse),
     };
     if (def.filterType === 'Weapon') {
