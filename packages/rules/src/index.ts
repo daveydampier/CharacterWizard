@@ -3,3 +3,4 @@ export * from './checks';
 export * from './defence';
 export * from './attacks';
 export * from './spellcasting';
+export * from './resources';

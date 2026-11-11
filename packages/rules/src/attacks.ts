@@ -1,4 +1,4 @@
-import type { AbilityName, Character, DamagePart, Weapon } from '@cw/model';
+import type { AbilityName, ActionEntry, Character, DamagePart, Weapon } from '@cw/model';
 import { abilityMod, abilityScores, hasModifier, proficiencyBonus } from './core';
 
 export interface WeaponAttack {
@@ -70,4 +70,31 @@ export function weaponAttacks(c: Character): WeaponAttack[] {
 export function unarmedStrike(c: Character): { attack: number; damage: number } {
   const mod = abilityMod(abilityScores(c).str);
   return { attack: mod + proficiencyBonus(c.level), damage: Math.max(0, 1 + mod) };
+}
+
+export interface ActionAttack {
+  key: string;
+  name: string;
+  source: ActionEntry['source'];
+  attack: number;
+  damage: string | null;
+}
+
+/** Attacks that come from features, feats and custom actions rather than from weapons. */
+export function actionAttacks(c: Character): ActionAttack[] {
+  const scores = abilityScores(c);
+  const pb = proficiencyBonus(c.level);
+  const out: ActionAttack[] = [];
+  for (const a of c.actions) {
+    if (!a.attack) continue;
+    const mod = abilityMod(scores[a.attack.ability]);
+    out.push({
+      key: a.key,
+      name: a.name,
+      source: a.source,
+      attack: mod + (a.attack.proficient ? pb : 0),
+      damage: a.dice ? formatDamage(`${a.dice.count}d${a.dice.sides}`, a.dice.fixed + mod) : null,
+    });
+  }
+  return out;
 }

@@ -1,4 +1,5 @@
 import type { Character } from '@cw/model';
+import { convertActions } from './actions';
 import { convertClasses } from './classes';
 import { convertArmor, convertWeapons } from './items';
 import { convertModifiers } from './modifiers';
@@ -24,6 +25,6 @@ export function convertCharacter(input: unknown): Character {
     weapons: convertWeapons(d),
     armor: convertArmor(d),
     spells: convertSpells(d, level),
-    actions: [],
+    actions: convertActions(d),
   };
 }
