@@ -348,5 +348,5 @@ The ability key and overlay model leave room for the first three without rework.
 | The unofficial endpoint changes or is closed | All D&D Beyond handling is isolated in `ddb-import` and one Edge Function. Saved characters keep working from stored JSON. A PDF or manual importer can target the same `Character` format |
 | A public release would lean on an unofficial endpoint and D&D Beyond's terms | Out of scope now; must be revisited before any public launch |
 | Homebrew authored as text only | Tag editor, per-number overrides and custom abilities cover every case by hand |
-| Sheet maths disagrees with D&D Beyond | Fixture tests against all seven real sheets; every number is overridable |
+| Sheet maths disagrees with D&D Beyond | Fixture tests against every available real sheet; every number is overridable |
 | Players must set sheets to Public | The import screen explains it and recognises the 403 response |
