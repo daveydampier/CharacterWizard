@@ -4,3 +4,6 @@ export * from './defence';
 export * from './attacks';
 export * from './spellcasting';
 export * from './resources';
+export * from './tags';
+export * from './abilities';
+export * from './sheet';
