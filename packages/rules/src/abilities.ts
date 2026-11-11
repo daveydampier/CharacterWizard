@@ -40,8 +40,17 @@ function spellRoll(c: Character, s: SpellEntry, ability: AbilityName | null, cla
   return { kind: 'none' };
 }
 
-function spellCost(s: SpellEntry, pact: boolean): Cost {
+/**
+ * A spell's own pool comes first. An item-granted spell is assumed to cost one charge of its
+ * item's pool (the charge amount is not modelled); without a pool it is free.
+ */
+function spellCost(c: Character, s: SpellEntry, pact: boolean): Cost {
   if (s.uses) return { kind: 'uses', resourceKey: s.key };
+  if (s.itemKey) {
+    return c.chargedItems.some((i) => i.key === s.itemKey)
+      ? { kind: 'uses', resourceKey: s.itemKey }
+      : { kind: 'none' };
+  }
   if (s.usesSlot) return { kind: 'slot', minLevel: s.level, pact };
   return { kind: 'none' };
 }
@@ -56,7 +65,7 @@ function spellAbilities(c: Character): Ability[] {
       source: 'spell',
       timing: s.timing,
       roll: spellRoll(c, s, s.castingAbility ?? ctx.ability, ctx.className),
-      cost: spellCost(s, ctx.pact),
+      cost: spellCost(c, s, ctx.pact),
       tags,
       concentration: s.concentration,
       range: s.range,
@@ -160,8 +169,8 @@ export function resources(c: Character): Resource[] {
   for (const s of c.spells) {
     if (s.uses) out.push({ key: s.key, name: s.name, max: limitedUseMax(c, s.uses), reset: s.uses.reset });
   }
-  for (const w of c.weapons) {
-    if (w.uses) out.push({ key: w.key, name: w.name, max: limitedUseMax(c, w.uses), reset: w.uses.reset });
+  for (const i of c.chargedItems) {
+    out.push({ key: i.key, name: i.name, max: limitedUseMax(c, i.uses), reset: i.uses.reset });
   }
   return out;
 }

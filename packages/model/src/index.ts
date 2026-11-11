@@ -124,7 +124,16 @@ export interface SpellEntry {
   /** Casting ability stated on this spell; null means use the class's. */
   castingAbility: AbilityName | null;
   uses: LimitedUse | null;
+  /** Key of the item that grants this spell (`item:<definitionId>:base`); null if not item-granted. */
+  itemKey: string | null;
   description: string;
+}
+
+/** An active inventory item with charges, keyed like weapons (`item:<definitionId>:base`). */
+export interface ChargedItem {
+  key: string;
+  name: string;
+  uses: LimitedUse;
 }
 
 export interface ActionDice {
@@ -166,6 +175,7 @@ export interface Character {
   skillCustom: Partial<Record<SkillName, SkillCustom>>;
   weapons: Weapon[];
   armor: Armor[];
+  chargedItems: ChargedItem[];
   spells: SpellEntry[];
   actions: ActionEntry[];
 }

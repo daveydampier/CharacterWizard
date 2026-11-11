@@ -1,7 +1,7 @@
 import type { Character } from '@cw/model';
 import { convertActions } from './actions';
 import { convertClasses } from './classes';
-import { convertArmor, convertWeapons } from './items';
+import { convertArmor, convertChargedItems, convertWeapons } from './items';
 import { convertModifiers } from './modifiers';
 import { num, obj, str } from './raw';
 import { baseScores, scoreOverrides } from './scores';
@@ -25,6 +25,7 @@ export function convertCharacter(input: unknown): Character {
     skillCustom: convertSkillCustom(d),
     weapons: convertWeapons(d),
     armor: convertArmor(d),
+    chargedItems: convertChargedItems(d),
     spells: convertSpells(d, level),
     actions: convertActions(d),
   };

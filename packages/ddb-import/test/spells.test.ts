@@ -38,6 +38,17 @@ describe('spells', () => {
     expect(fireBolt?.castingAbility).toBe('int');
   });
 
+  it('links an item-granted spell to its item and ignores the placeholder pool', () => {
+    const ray = convertCharacter(loadRaw('maya')).spells.find((s) => s.name === 'Scorching Ray');
+    expect(ray).toMatchObject({ itemKey: 'item:10968023:base', uses: null });
+    expect(ray?.key.endsWith(':free')).toBe(true);
+    expect(vlad.every((s) => s.itemKey === null)).toBe(true);
+  });
+
+  it('skips a spell granted by an item that is not active', () => {
+    expect(convertCharacter(loadRaw('minkis')).spells.find((s) => s.name === 'Enlarge/Reduce')).toBeUndefined();
+  });
+
   it.each(SLUGS)('gives every spell a unique key: %s', (slug) => {
     const keys = convertCharacter(loadRaw(slug)).spells.map((s) => s.key);
     expect(new Set(keys).size).toBe(keys.length);

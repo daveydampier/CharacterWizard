@@ -96,6 +96,45 @@ describe('buildAbilities: other characters', () => {
   });
 });
 
+describe('item charges and item-granted spells', () => {
+  const sheetOf = (slug: (typeof SLUGS)[number]) => buildSheet(convertCharacter(loadRaw(slug)));
+
+  it('charges an item spell to its item\'s pool', () => {
+    const maya = sheetOf('maya');
+    expect(maya.abilities.find((a) => a.name === 'Scorching Ray')?.cost).toEqual({
+      kind: 'uses', resourceKey: 'item:10968023:base',
+    });
+    expect(maya.resources.find((r) => r.name === 'Shepherds Staff')).toMatchObject({ key: 'item:10968023:base', max: 1 });
+  });
+
+  it('lists no spell from an item that is not active', () => {
+    expect(sheetOf('minkis').abilities.find((a) => a.name === 'Enlarge/Reduce')).toBeUndefined();
+  });
+
+  it('lists charges on equipped non-weapon items', () => {
+    expect(sheetOf('franny').resources.find((r) => r.name.includes('Gift'))).toMatchObject({ max: 1 });
+    expect(sheetOf('minkis').resources.find((r) => r.name === 'Focus of the Chess Master')).toMatchObject({ max: 2 });
+    expect(sheetOf('sid').resources.find((r) => r.name === 'Quiver of Imagination')).toMatchObject({ max: 3 });
+  });
+
+  it('still lists each weapon pool once', () => {
+    const pools = sheetOf('vlad').resources.filter((r) => r.name.startsWith('Wurms Claw'));
+    expect(pools.map((r) => r.max)).toEqual([3, 3, 3]);
+  });
+
+  it('costs nothing when an item spell\'s item has no pool', () => {
+    const c = convertCharacter(loadRaw('maya'));
+    c.chargedItems = [];
+    expect(buildAbilities(c).find((a) => a.name === 'Scorching Ray')?.cost).toEqual({ kind: 'none' });
+  });
+
+  it.each(SLUGS)('has no empty resource and no duplicate resource key: %s', (slug) => {
+    const list = sheetOf(slug).resources;
+    expect(list.filter((r) => r.max === 0)).toEqual([]);
+    expect(new Set(list.map((r) => r.key)).size).toBe(list.length);
+  });
+});
+
 describe.each(SLUGS)('buildSheet: %s', (slug) => {
   it('agrees with the expected file on every headline number', () => {
     const sheet = buildSheet(convertCharacter(loadRaw(slug)));

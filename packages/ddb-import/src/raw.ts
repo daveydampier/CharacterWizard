@@ -38,15 +38,15 @@ export function resetFrom(v: unknown): ResetType {
   return 'unknown';
 }
 
+/** A pool with no positive maxUses and no ability or proficiency scaling is a placeholder: null. */
 export function limitedUseFrom(lu: unknown): LimitedUse | null {
   if (lu === null || typeof lu !== 'object') return null;
   const l = lu as Raw;
-  return {
-    base: num(l.maxUses) ?? 0,
-    ability: abilityFromStatId(l.statModifierUsesId),
-    addProficiency: l.useProficiencyBonus === true,
-    reset: resetFrom(l.resetType),
-  };
+  const base = num(l.maxUses) ?? 0;
+  const ability = abilityFromStatId(l.statModifierUsesId);
+  const addProficiency = l.useProficiencyBonus === true;
+  if (base <= 0 && ability === null && !addProficiency) return null;
+  return { base, ability, addProficiency, reset: resetFrom(l.resetType) };
 }
 
 export const slug = (s: string): string =>

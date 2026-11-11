@@ -1,4 +1,5 @@
-import type { Armor, DamagePart, Weapon } from '@cw/model';
+import type { Armor, ChargedItem, DamagePart, Weapon } from '@cw/model';
+import { activeItemIds } from './modifiers';
 import { arr, limitedUseFrom, num, obj, slug, str, type Raw } from './raw';
 
 /** characterValues rows with this typeId and value true mark an inventory item as a pact weapon. */
@@ -69,6 +70,23 @@ export function convertWeapons(d: Raw): Weapon[] {
         properties: ['Versatile'],
       });
     }
+  }
+  return out;
+}
+
+/** Every active item (equipped, and attuned if attunable) that has a real limited-use pool. */
+export function convertChargedItems(d: Raw): ChargedItem[] {
+  const active = activeItemIds(d);
+  const out: ChargedItem[] = [];
+  for (const item of arr(d.inventory)) {
+    const def = obj(item?.definition);
+    const id = num(def.id);
+    const uses = limitedUseFrom(item?.limitedUse);
+    if (id === null || !active.has(id) || !uses) continue;
+    const key = `item:${id}:base`;
+    // Two copies of one item share a key; only the first is kept.
+    if (out.some((i) => i.key === key)) continue;
+    out.push({ key, name: str(def.name), uses });
   }
   return out;
 }

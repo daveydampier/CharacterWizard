@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { convertCharacter } from '../src/index';
+import { limitedUseFrom } from '../src/raw';
 import { loadRaw } from '../../../test-utils/fixtures';
 
 describe('weapons', () => {
@@ -29,6 +30,37 @@ describe('weapons', () => {
     const raw = loadRaw('franny');
     for (const item of raw.data.inventory) item.equipped = false;
     expect(convertCharacter(raw).weapons).toEqual([]);
+  });
+});
+
+describe('charged items', () => {
+  const charged = (slug: Parameters<typeof loadRaw>[0]) => convertCharacter(loadRaw(slug)).chargedItems;
+
+  it('reads charges on equipped items, weapon or not', () => {
+    expect(charged('maya')).toContainEqual({
+      key: 'item:10968023:base', name: 'Shepherds Staff',
+      uses: { base: 1, ability: null, addProficiency: false, reset: 'long' },
+    });
+    expect(charged('sid').find((i) => i.name === 'Quiver of Imagination')?.uses.base).toBe(3);
+    expect(charged('vlad').map((i) => i.name).sort()).toEqual([
+      'Wurms Claw - Axe', 'Wurms Claw - Hammer', 'Wurms Claw - Sword',
+    ]);
+  });
+
+  it('skips items that are not active', () => {
+    expect(charged('minkis').map((i) => i.name)).toEqual(['Focus of the Chess Master']);
+    const raw = loadRaw('sid');
+    for (const item of raw.data.inventory) item.equipped = false;
+    expect(convertCharacter(raw).chargedItems).toEqual([]);
+  });
+});
+
+describe('limitedUseFrom', () => {
+  it('treats a pool with no uses and no scaling as no pool', () => {
+    expect(limitedUseFrom({ maxUses: 0, statModifierUsesId: null, useProficiencyBonus: false, resetType: null })).toBeNull();
+    expect(limitedUseFrom({ maxUses: 0, statModifierUsesId: 6, resetType: 2 })).toMatchObject({ ability: 'cha' });
+    expect(limitedUseFrom({ maxUses: 0, useProficiencyBonus: true, resetType: 2 })).toMatchObject({ addProficiency: true });
+    expect(limitedUseFrom({ maxUses: 2, resetType: 'Dawn' })).toMatchObject({ base: 2, reset: 'long' });
   });
 });
 
