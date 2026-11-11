@@ -29,6 +29,16 @@ importers:
 
   packages/model: {}
 
+  packages/rules:
+    dependencies:
+      '@cw/model':
+        specifier: workspace:*
+        version: link:../model
+    devDependencies:
+      '@cw/ddb-import':
+        specifier: workspace:*
+        version: link:../ddb-import
+
 packages:
 
   '@esbuild/aix-ppc64@0.28.2':
