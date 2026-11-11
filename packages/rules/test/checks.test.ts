@@ -23,6 +23,20 @@ describe.each(SLUGS)('matches the D&D Beyond sheet: %s', (slug) => {
   it('skills', () => expect(skills(c)).toEqual(e.skills));
 });
 
+describe('score overrides', () => {
+  it('replaces the computed score, winning over bonus and set modifiers', () => {
+    const c = convertCharacter(loadRaw('vlad'));
+    const mod = (type: string, value: number) => ({
+      type, subType: 'wisdom-score', value, ability: null, dice: null,
+      addProficiency: false, restriction: '', fromItem: false, componentId: null,
+    });
+    c.modifiers.push(mod('bonus', 1), mod('set', 20));
+    c.scoreOverrides = { wis: 18 };
+    expect(abilityScores(c).wis).toBe(18);
+    expect(abilityScores(c).cha).toBe(abilityScores(convertCharacter(loadRaw('vlad'))).cha);
+  });
+});
+
 describe('conditional bonuses', () => {
   it('ignores a bonus that has a restriction', () => {
     const c = convertCharacter(loadRaw('vlad'));

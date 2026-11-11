@@ -18,6 +18,19 @@ describe.each(SLUGS)('convertCharacter core: %s', (slug) => {
   });
 });
 
+describe('score overrides', () => {
+  it('carries an overrideStats value separately and leaves the base score alone', () => {
+    const plain = convertCharacter(loadRaw('maya'));
+    expect(plain.scoreOverrides).toEqual({});
+    const raw = loadRaw('maya');
+    const wis = raw.data.overrideStats.find((s: any) => s.id === 5);
+    wis.value = plain.baseScores.wis + 3;
+    const c = convertCharacter(raw);
+    expect(c.scoreOverrides).toEqual({ wis: plain.baseScores.wis + 3 });
+    expect(c.baseScores).toEqual(plain.baseScores);
+  });
+});
+
 describe('classes', () => {
   it('marks a Warlock as Pact Magic with its slot row', () => {
     const cls = convertCharacter(loadRaw('vlad')).classes[0];

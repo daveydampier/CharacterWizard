@@ -159,6 +159,8 @@ export interface Character {
   level: number;
   /** Scores before modifier bonuses. */
   baseScores: Record<AbilityName, number>;
+  /** Scores set outright on the sheet. Each replaces the computed score, after all modifiers. */
+  scoreOverrides: Partial<Record<AbilityName, number>>;
   classes: CharacterClass[];
   modifiers: Modifier[];
   skillCustom: Partial<Record<SkillName, SkillCustom>>;

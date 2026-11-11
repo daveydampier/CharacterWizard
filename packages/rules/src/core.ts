@@ -23,7 +23,7 @@ export function abilityScores(c: Character): Record<AbilityName, number> {
         score = Math.max(score, m.value ?? 0);
       }
     }
-    out[ability] = score;
+    out[ability] = c.scoreOverrides[ability] ?? score;
   }
   return out;
 }

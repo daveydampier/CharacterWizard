@@ -4,7 +4,7 @@ import { convertClasses } from './classes';
 import { convertArmor, convertWeapons } from './items';
 import { convertModifiers } from './modifiers';
 import { num, obj, str } from './raw';
-import { baseScores } from './scores';
+import { baseScores, scoreOverrides } from './scores';
 import { convertSkillCustom } from './skills';
 import { convertSpells } from './spells';
 
@@ -19,6 +19,7 @@ export function convertCharacter(input: unknown): Character {
     name: str(d.name),
     level,
     baseScores: baseScores(d),
+    scoreOverrides: scoreOverrides(d),
     classes,
     modifiers: convertModifiers(d),
     skillCustom: convertSkillCustom(d),
