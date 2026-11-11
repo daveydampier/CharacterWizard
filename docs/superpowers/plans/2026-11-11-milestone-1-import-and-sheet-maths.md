@@ -2846,3 +2846,7 @@ Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>"
 - Player overrides of calculated numbers arrive with overlays in milestone 3.
 - `customItems` are free-text inventory notes with no mechanics. They are not converted until a view lists inventory.
 - Custom actions carry `toHitBonus` and `damageBonus` fields. No fixture sets them, so they are not read yet.
+- Weapon attack and damage use no flat `bonus` modifiers and Armor Class sums only `armor-class`, so fighting styles such as Archery or Defense are not applied. No fixture has one.
+- An item-granted spell is assumed to cost one charge of its item.
+- Two equipped copies of the same item share one key, so only one appears. The persistent key format is settled in milestone 3.
+- `Roll` has no damage-only variant, so spells with damage but no attack or save (Hex, Absorb Elements) show no damage.
