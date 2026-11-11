@@ -11,6 +11,15 @@ New players at a home D&D table struggle to follow the rules and to find a flow 
 
 **Rules basis:** D&D SRD 5.2 (2024 rules), licensed CC-BY-4.0.
 
+### Design principle: general, not fitted
+
+The app is built for any D&D Beyond character, not for the characters used to test it.
+
+- No code may branch on a specific character, subclass, item, campaign or table.
+- The converter and engine work only from D&D Beyond's general data structure and from tags.
+- Real characters are fixtures: examples that prove the maths and expose edge cases. Passing the fixtures is evidence, not the goal.
+- Content the app has never seen (homebrew, third-party, new sourcebooks) must still import, calculate and display. At worst its abilities start untagged and are ordered by the player's own ordering and usage.
+
 ## 2. Decisions
 
 | Topic | Decision |
@@ -42,16 +51,36 @@ This endpoint is undocumented and unofficial. Findings:
 - **No derived numbers.** Attack bonuses, save DC and slot counts are absent. `pactMagic` and `spellSlots` report zero available; the real counts come from `classes[].definition.spellRules.levelSpellSlots`.
 - **Noise exists.** Sourcebook-granted actions that the player never uses appear in `actions.class` (seven "Circle Spell" entries on this character).
 
-Verified ID mappings:
+A second pass the same day fetched thirteen more character IDs. Seven returned data and six returned the 403 above. The eight accessible characters are all single-class and all on 2024 rules:
+
+| Class and level | Subclass | Homebrew present |
+|---|---|---|
+| Barbarian 3 | Path of the Pack Queen | Subclass, item, feat, one custom action |
+| Bard 3 | College of the Soloist | Subclass, item, three custom items |
+| Cleric 3 | Life Domain | Item |
+| Fighter 9 | Eldritch Knight | Items |
+| Rogue 3 | Shadow Stalker | Subclass, item |
+| Sorcerer 3 | Prophet of Flame | Subclass, feat |
+| Warlock 3 | Thressia, Spirit of the Tatzelwurm | Subclass, items |
+| Wizard 3 | Grandmaster | Subclass, item, two custom items |
+
+Additional findings from the wider set:
+
+- `customActions` and `customItems` are in use and must be converted like any other ability or item.
+- Homebrew feats occur as well as homebrew subclasses and items.
+- A level 9 Fighter brings Extra Attack, so the Attack action must state how many attacks it grants.
+
+ID mappings observed across the eight characters:
 
 | Field | Values |
 |---|---|
 | Ability (`statId`, `saveDcAbilityId`) | 1 Strength, 2 Dexterity, 3 Constitution, 4 Intelligence, 5 Wisdom, 6 Charisma |
-| `activation.activationType` | 1 Action, 3 Bonus Action, 4 Reaction, 6 Minute |
-| `limitedUse.resetType` (numeric) | 2 Long Rest |
-| `limitedUse.resetType` (items, string) | `"LongRest"` |
+| `activation.activationType` | 1 Action, 2 No Action (Font of Magic conversion), 3 Bonus Action, 4 Reaction, 6 Minute, 7 Hour, 8 Special (Action Surge, Indomitable) |
+| `limitedUse.resetType` (numeric) | 1 Short Rest (Action Surge), 2 Long Rest |
+| `limitedUse.resetType` (items, string) | `"LongRest"`, `"Dawn"`, `"Consumable"` |
+| Spell tags | `Damage`, `Control`, `Buff`, `Debuff`, `Warding`, `Healing`, `Utility`, `Social`, `Deception`, `Detection`, `Communication`, `Exploration`, `Teleportation`, `Summoning`, `Shapechanging`, `Combat` |
 
-Other activation and reset values are confirmed during milestone 1 against all seven characters.
+Any value not listed here must be handled as unknown, not rejected: the ability is still shown, with timing `unknown` or tag `utility`.
 
 ## 4. Architecture
 
@@ -75,7 +104,9 @@ If the endpoint changes, only `ddb-import` changes. A PDF or manual-entry import
 Everything a character can do is one record type.
 
 ```ts
-type Timing = 'action' | 'bonus' | 'reaction' | 'free' | 'passive' | 'minutes' | 'unknown';
+// 'free' covers D&D Beyond's "No Action" and "Special": usable without spending
+// an Action, Bonus Action or Reaction. 'long' covers anything taking a minute or more.
+type Timing = 'action' | 'bonus' | 'reaction' | 'free' | 'passive' | 'long' | 'unknown';
 
 type Tag =
   | 'damage' | 'healing' | 'buff' | 'debuff' | 'control'
@@ -110,13 +141,15 @@ interface Ability {
 
 **Ability key:** `{kind}:{definitionId}:{grantingComponentId or "base"}`. The granting component is part of the key because the same spell can arrive twice with different costs, for example Misty Step cast with a slot and Misty Step cast free through a subclass feature. Custom abilities use a UUID.
 
-**Tag mapping from D&D Beyond spell tags:** `Damage`→damage, `Healing`→healing, `Buff`→buff, `Debuff`→debuff, `Control`→control, `Teleportation`→movement, `Warding`→defence, `Social` and `Deception`→social, `Combat`→ignored, anything else→utility. The full tag list is gathered in milestone 1.
+**Tag mapping from D&D Beyond spell tags:** `Damage`→damage, `Healing`→healing, `Buff`→buff, `Debuff`→debuff, `Control`→control, `Teleportation`→movement, `Warding`→defence, `Social` and `Deception`→social, `Combat`→ignored, anything else→utility.
 
 **Curated data** (shipped in `packages/rules`, written from SRD 5.2):
 
 - The universal actions: Attack, Dash, Disengage, Dodge, Help, Hide, Influence, Magic, Ready, Search, Study, Utilize.
-- Purpose tags for base class features of the seven classes at the table (Barbarian, Bard, Cleric, Rogue, Sorcerer, Warlock, Wizard), extended as characters level up.
+- Purpose tags for every class feature, levels 1 to 20, of all twelve SRD classes (Barbarian, Bard, Cleric, Druid, Fighter, Monk, Paladin, Ranger, Rogue, Sorcerer, Warlock, Wizard) and the one subclass the SRD includes for each.
 - The pairing rules in section 9.
+
+Curated entries are matched to imported features by D&D Beyond's definition ID where known and by name otherwise. A feature with no curated entry and no D&D Beyond tags starts untagged; this is the normal path for non-SRD subclasses, third-party content and homebrew.
 
 ### 5.2 Stored data (Postgres)
 
@@ -157,6 +190,7 @@ Overlays are keyed by ability key, so a re-import keeps every correction and ord
 - Skill checks and saving throws: proficiency, expertise, flat bonuses. Advantage is shown as a note, not applied.
 - Spell attack bonus and save DC from the class's spellcasting ability.
 - Weapon attacks and damage: Strength or Dexterity by weapon properties, `replace-weapon-ability` modifiers (Pact of the Blade), proficiency, magic bonus. Extra dice from item modifiers are listed as `optionalDamage`.
+- Attacks per Attack action, from Extra Attack and its upgrades.
 - Spell slots and Pact Magic slots from `spellRules.levelSpellSlots`.
 - Limited-use maximums: fixed, ability-modifier based (`statModifierUsesId`), and proficiency-bonus based (`useProficiencyBonus`).
 - Initiative and a basic Armor Class (armour, shield, Dexterity, flat bonuses, Barbarian Unarmored Defense).
@@ -173,7 +207,7 @@ Not calculated: effects that exist only in description text, hit points, conditi
 
 **Start my turn:** resets Action, Bonus Action, Reaction and `slotSpentThisTurn`.
 
-**Rests:** Short Rest restores short-rest resources and Pact Magic slots. Long Rest restores everything and clears concentration.
+**Rests:** Short Rest restores short-rest resources and Pact Magic slots. Long Rest restores everything and clears concentration. Item charges that reset at dawn are restored on a Long Rest. Consumables never reset.
 
 **Hard rules** (deterministic, from SRD 5.2):
 
@@ -233,7 +267,8 @@ Both views are phone first.
 - Turn tracker: three pills for Action, Bonus Action and Reaction.
 - Resources: this character's limited pools, as remaining and maximum.
 - Suggested turn card with reason and thumbs up or down; swipe for the next plan.
-- Abilities grouped by Action, Bonus Action, Reaction. Each row has a drag handle, name, tags, a plain-English roll line and a Use button.
+- Abilities grouped by Action, Bonus Action, Reaction, and "No action needed" (timing `free`, for example Action Surge). Each row has a drag handle, name, tags, a plain-English roll line and a Use button.
+- The Attack action states the number of attacks when it is more than one.
 - A collapsed "Anyone can do this" group for the universal actions.
 - A "Start my turn" button.
 
@@ -279,6 +314,8 @@ Both views are phone first.
 ## 14. Testing
 
 - **Converter and sheet maths:** each real character is a fixture. The stored JSON goes in; attack bonuses, save DC, slot counts and limited-use maximums must match what D&D Beyond's own sheet displays. Fixtures have `username`, `userId`, `campaign` and avatar URLs removed before they are committed.
+- **Generality:** the converter is also tested with synthetic input containing unknown activation types, unknown reset types, unknown tags and features with no structure at all. Each must produce a displayable ability and never an error.
+- **Coverage gap:** Druid, Monk, Paladin and Ranger have curated tags but no real fixture yet. Their maths is unverified against a real sheet until a fixture for each is added.
 - **Rules and suggestions:** table-driven tests. A character plus a turn state goes in; expected availability, ordering and plans come out. For example, for the level 3 Warlock: Hex plus Eldritch Blast is legal; Hex plus Arms of Hadar is not (two slots); a free Misty Step plus Arms of Hadar is legal.
 - **Web app:** component tests for the Use, undo, Start my turn and rest flows.
 
@@ -286,7 +323,7 @@ Both views are phone first.
 
 Each milestone is usable on its own and gets its own implementation plan.
 
-1. **Import and sheet maths**, verified against all seven characters. Requires all seven sheets set to Public.
+1. **Import and sheet maths**, verified against every available fixture (eight characters across eight classes as of 2026-11-11). Curated tags for all twelve classes are written in milestone 4, where they are first used.
 2. **Both views with turn and resource tracking**, stored on the device only.
 3. **Accounts, saved characters and overlays** (edit, reorder, hide, add custom).
 4. **Suggestions:** turn plans, situation chips, feedback and usage learning.
