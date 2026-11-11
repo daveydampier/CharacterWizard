@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { convertCharacter } from '@cw/ddb-import';
-import { spellSaveDc, spellSlots, spellcasting } from '../src/index';
+import { buildAbilities, spellAttackBonus, spellSaveDc, spellSlots, spellcasting } from '../src/index';
 import { SLUGS, loadExpected, loadRaw } from '../../../test-utils/fixtures';
 
 describe.each(SLUGS)('matches the D&D Beyond sheet: %s', (slug) => {
@@ -16,6 +16,23 @@ describe.each(SLUGS)('matches the D&D Beyond sheet: %s', (slug) => {
     const { slots, pact } = spellSlots(c);
     expect(slots).toEqual(e.slots);
     expect(pact).toEqual(e.pactSlots);
+  });
+});
+
+describe('class-specific spell attack bonus', () => {
+  it('adds a <class>-spell-attacks bonus only for that class', () => {
+    const c = convertCharacter(loadRaw('vlad'));
+    const before = spellAttackBonus(c, 'cha');
+    c.modifiers.push({
+      type: 'bonus', subType: 'warlock-spell-attacks', value: 2, ability: null, dice: null,
+      addProficiency: false, restriction: '', fromItem: false, componentId: null,
+    });
+    expect(spellAttackBonus(c, 'cha')).toBe(before);
+    expect(spellAttackBonus(c, 'cha', 'Wizard')).toBe(before);
+    expect(spellAttackBonus(c, 'cha', 'Warlock')).toBe(before + 2);
+    expect(spellcasting(c)?.attack).toBe(before + 2);
+    const blast = buildAbilities(c).find((a) => a.name === 'Eldritch Blast');
+    expect(blast?.roll).toMatchObject({ kind: 'attack', bonus: before + 2 });
   });
 });
 

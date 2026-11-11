@@ -3,8 +3,10 @@ import { abilityMod, abilityScores, bonusTotal, proficiencyBonus } from './core'
 
 const kebab = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 
-export function spellAttackBonus(c: Character, ability: AbilityName): number {
-  return proficiencyBonus(c.level) + abilityMod(abilityScores(c)[ability]) + bonusTotal(c, ['spell-attacks']);
+export function spellAttackBonus(c: Character, ability: AbilityName, className: string | null = null): number {
+  const subTypes = ['spell-attacks'];
+  if (className) subTypes.push(`${kebab(className)}-spell-attacks`);
+  return proficiencyBonus(c.level) + abilityMod(abilityScores(c)[ability]) + bonusTotal(c, subTypes);
 }
 
 export function spellSaveDc(c: Character, ability: AbilityName, className: string | null): number {
@@ -18,7 +20,7 @@ export function spellcasting(c: Character): { ability: AbilityName; attack: numb
   const cls = c.classes.find((k) => k.hasSpellcasting && k.spellcastingAbility);
   if (!cls || !cls.spellcastingAbility) return null;
   const ability = cls.spellcastingAbility;
-  return { ability, attack: spellAttackBonus(c, ability), saveDc: spellSaveDc(c, ability, cls.name) };
+  return { ability, attack: spellAttackBonus(c, ability, cls.name), saveDc: spellSaveDc(c, ability, cls.name) };
 }
 
 export function spellSlots(c: Character): {

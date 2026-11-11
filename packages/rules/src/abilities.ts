@@ -35,7 +35,7 @@ function castingContext(c: Character): { ability: AbilityName | null; className:
 function spellRoll(c: Character, s: SpellEntry, ability: AbilityName | null, className: string | null): Roll {
   const damage: DamagePart[] = s.damage ? [s.damage] : [];
   if (!ability) return { kind: 'none' };
-  if (s.attack) return { kind: 'attack', bonus: spellAttackBonus(c, ability), damage, optionalDamage: [] };
+  if (s.attack) return { kind: 'attack', bonus: spellAttackBonus(c, ability, className), damage, optionalDamage: [] };
   if (s.saveAbility) return { kind: 'save', ability: s.saveAbility, dc: spellSaveDc(c, ability, className), damage };
   return { kind: 'none' };
 }
