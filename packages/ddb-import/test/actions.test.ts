@@ -41,6 +41,18 @@ describe('actions', () => {
     });
   });
 
+  it('keeps actions that have neither an id nor a name', () => {
+    const actions = convertCharacter({
+      data: {
+        actions: { class: [{ activation: { activationType: 1 } }, { activation: { activationType: 3 } }], race: [{}] },
+        customActions: [{}, {}],
+      },
+    }).actions;
+    expect(actions).toHaveLength(5);
+    expect(new Set(actions.map((a) => a.key)).size).toBe(5);
+    expect(actions.every((a) => !a.key.includes('undefined'))).toBe(true);
+  });
+
   it.each(SLUGS)('drops no action: %s', (slug) => {
     const d = loadRaw(slug).data;
     const expected =
