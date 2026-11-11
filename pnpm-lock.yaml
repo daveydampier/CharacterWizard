@@ -8,6 +8,15 @@ importers:
 
   .:
     devDependencies:
+      '@cw/ddb-import':
+        specifier: workspace:*
+        version: link:packages/ddb-import
+      '@cw/model':
+        specifier: workspace:*
+        version: link:packages/model
+      '@cw/rules':
+        specifier: workspace:*
+        version: link:packages/rules
       '@types/node':
         specifier: ^26.6.6
         version: 26.6.6

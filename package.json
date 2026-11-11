@@ -9,6 +9,9 @@
     "fetch-character": "tsx scripts/fetch-character.ts"
   },
   "devDependencies": {
+    "@cw/ddb-import": "workspace:*",
+    "@cw/model": "workspace:*",
+    "@cw/rules": "workspace:*",
     "@types/node": "^26.6.6",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
