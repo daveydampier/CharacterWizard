@@ -1,0 +1,69 @@
+{
+  "source": "Values read from the public D&D Beyond sheet on 2026-11-11; slot counts from the class table",
+  "level": 3,
+  "proficiencyBonus": 2,
+  "scores": {
+    "str": 9,
+    "dex": 10,
+    "con": 14,
+    "int": 12,
+    "wis": 16,
+    "cha": 14
+  },
+  "saves": {
+    "str": -1,
+    "dex": 0,
+    "con": 2,
+    "int": 1,
+    "wis": 5,
+    "cha": 4
+  },
+  "skills": {
+    "acrobatics": 0,
+    "animal-handling": 3,
+    "arcana": 6,
+    "athletics": -1,
+    "deception": 2,
+    "history": 3,
+    "insight": 5,
+    "intimidation": 2,
+    "investigation": 1,
+    "medicine": 5,
+    "nature": 1,
+    "perception": 3,
+    "performance": 2,
+    "persuasion": 2,
+    "religion": 6,
+    "sleight-of-hand": 0,
+    "stealth": 0,
+    "survival": 3
+  },
+  "initiative": 0,
+  "armorClass": 11,
+  "attacksPerAction": 1,
+  "spellcasting": {
+    "attack": 5,
+    "saveDc": 13
+  },
+  "slots": {
+    "1": 4,
+    "2": 2
+  },
+  "pactSlots": null,
+  "weapons": [
+    {
+      "name": "Shepherds Staff",
+      "attack": 1,
+      "damage": "1d6-1",
+      "versatile": "1d8-1"
+    }
+  ],
+  "unarmed": {
+    "attack": 1,
+    "damage": 0
+  },
+  "actionAttacks": [],
+  "limitedUses": {
+    "Channel Divinity": 2
+  }
+}

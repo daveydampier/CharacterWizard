@@ -1,0 +1,79 @@
+{
+  "source": "Values read from the public D&D Beyond sheet on 2026-11-11; slot counts from the class table",
+  "level": 9,
+  "proficiencyBonus": 4,
+  "scores": {
+    "str": 20,
+    "dex": 14,
+    "con": 16,
+    "int": 16,
+    "wis": 10,
+    "cha": 8
+  },
+  "saves": {
+    "str": 9,
+    "dex": 2,
+    "con": 7,
+    "int": 3,
+    "wis": 0,
+    "cha": -1
+  },
+  "skills": {
+    "acrobatics": 2,
+    "animal-handling": 0,
+    "arcana": 7,
+    "athletics": 9,
+    "deception": -1,
+    "history": 3,
+    "insight": 0,
+    "intimidation": -1,
+    "investigation": 7,
+    "medicine": 0,
+    "nature": 3,
+    "perception": 4,
+    "performance": -1,
+    "persuasion": -1,
+    "religion": 3,
+    "sleight-of-hand": 2,
+    "stealth": 2,
+    "survival": 0
+  },
+  "initiative": 2,
+  "armorClass": 18,
+  "attacksPerAction": 2,
+  "spellcasting": {
+    "attack": 7,
+    "saveDc": 15
+  },
+  "slots": {
+    "1": 4,
+    "2": 2
+  },
+  "pactSlots": null,
+  "weapons": [
+    {
+      "name": "Tsaebeht",
+      "attack": 9,
+      "damage": "1d6+5",
+      "versatile": "1d8+5"
+    }
+  ],
+  "unarmed": {
+    "attack": 9,
+    "damage": 6
+  },
+  "actionAttacks": [
+    {
+      "name": "Pole Strike",
+      "source": "feat",
+      "attack": 9,
+      "damage": "1d4+5"
+    }
+  ],
+  "limitedUses": {
+    "Second Wind": 3,
+    "Action Surge": 1,
+    "Indomitable": 1,
+    "Guarded Mind": 1
+  }
+}

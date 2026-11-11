@@ -1,0 +1,63 @@
+{
+  "source": "Values read from the public D&D Beyond sheet on 2026-11-11; slot counts from the class table",
+  "level": 3,
+  "proficiencyBonus": 2,
+  "scores": {
+    "str": 10,
+    "dex": 8,
+    "con": 14,
+    "int": 12,
+    "wis": 14,
+    "cha": 16
+  },
+  "saves": {
+    "str": 0,
+    "dex": -1,
+    "con": 4,
+    "int": 1,
+    "wis": 2,
+    "cha": 5
+  },
+  "skills": {
+    "acrobatics": -1,
+    "animal-handling": 2,
+    "arcana": 3,
+    "athletics": 0,
+    "deception": 5,
+    "history": 3,
+    "insight": 4,
+    "intimidation": 3,
+    "investigation": 1,
+    "medicine": 2,
+    "nature": 1,
+    "perception": 4,
+    "performance": 5,
+    "persuasion": 5,
+    "religion": 1,
+    "sleight-of-hand": -1,
+    "stealth": -1,
+    "survival": 2
+  },
+  "initiative": 1,
+  "armorClass": 9,
+  "attacksPerAction": 1,
+  "spellcasting": {
+    "attack": 5,
+    "saveDc": 14
+  },
+  "slots": {
+    "1": 4,
+    "2": 2
+  },
+  "pactSlots": null,
+  "weapons": [],
+  "unarmed": {
+    "attack": 2,
+    "damage": 1
+  },
+  "actionAttacks": [],
+  "limitedUses": {
+    "Innate Sorcery": 2,
+    "Font of Magic: Sorcery Points": 3
+  }
+}

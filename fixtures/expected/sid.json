@@ -1,0 +1,63 @@
+{
+  "source": "Values read from the public D&D Beyond sheet on 2026-11-11; slot counts from the class table",
+  "level": 3,
+  "proficiencyBonus": 2,
+  "scores": {
+    "str": 9,
+    "dex": 16,
+    "con": 14,
+    "int": 10,
+    "wis": 12,
+    "cha": 14
+  },
+  "saves": {
+    "str": -1,
+    "dex": 5,
+    "con": 2,
+    "int": 2,
+    "wis": 1,
+    "cha": 2
+  },
+  "skills": {
+    "acrobatics": 5,
+    "animal-handling": 1,
+    "arcana": 0,
+    "athletics": -1,
+    "deception": 2,
+    "history": 0,
+    "insight": 3,
+    "intimidation": 2,
+    "investigation": 0,
+    "medicine": 3,
+    "nature": 0,
+    "perception": 1,
+    "performance": 2,
+    "persuasion": 2,
+    "religion": 2,
+    "sleight-of-hand": 7,
+    "stealth": 7,
+    "survival": 3
+  },
+  "initiative": 3,
+  "armorClass": 13,
+  "attacksPerAction": 1,
+  "spellcasting": null,
+  "slots": {},
+  "pactSlots": null,
+  "weapons": [
+    {
+      "name": "Shortbow",
+      "attack": 5,
+      "damage": "1d6+3",
+      "versatile": null
+    }
+  ],
+  "unarmed": {
+    "attack": 1,
+    "damage": 0
+  },
+  "actionAttacks": [],
+  "limitedUses": {
+    "Luck Points": 2
+  }
+}

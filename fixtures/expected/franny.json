@@ -1,0 +1,82 @@
+{
+  "source": "Values read from the public D&D Beyond sheet on 2026-11-11; slot counts from the class table",
+  "level": 3,
+  "proficiencyBonus": 2,
+  "scores": {
+    "str": 16,
+    "dex": 14,
+    "con": 16,
+    "int": 8,
+    "wis": 10,
+    "cha": 9
+  },
+  "saves": {
+    "str": 5,
+    "dex": 2,
+    "con": 5,
+    "int": -1,
+    "wis": 0,
+    "cha": -1
+  },
+  "skills": {
+    "acrobatics": 2,
+    "animal-handling": 2,
+    "arcana": -1,
+    "athletics": 5,
+    "deception": -1,
+    "history": -1,
+    "insight": 0,
+    "intimidation": -1,
+    "investigation": -1,
+    "medicine": 0,
+    "nature": 1,
+    "perception": 2,
+    "performance": -1,
+    "persuasion": -1,
+    "religion": -1,
+    "sleight-of-hand": 2,
+    "stealth": 2,
+    "survival": 7
+  },
+  "initiative": 2,
+  "armorClass": 15,
+  "attacksPerAction": 1,
+  "spellcasting": null,
+  "slots": {},
+  "pactSlots": null,
+  "weapons": [
+    {
+      "name": "Handaxe",
+      "attack": 5,
+      "damage": "1d6+3",
+      "versatile": null
+    },
+    {
+      "name": "Greataxe",
+      "attack": 5,
+      "damage": "1d12+3",
+      "versatile": null
+    }
+  ],
+  "unarmed": {
+    "attack": 5,
+    "damage": 4
+  },
+  "actionAttacks": [
+    {
+      "name": "Twig Attack",
+      "source": "class",
+      "attack": 4,
+      "damage": "1d8+4"
+    },
+    {
+      "name": "Twig Attack",
+      "source": "custom",
+      "attack": 4,
+      "damage": "1d8+2"
+    }
+  ],
+  "limitedUses": {
+    "Rage (Enter)": 3
+  }
+}
