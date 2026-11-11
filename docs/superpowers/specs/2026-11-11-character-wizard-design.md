@@ -89,6 +89,7 @@ One TypeScript monorepo (pnpm workspaces).
 | Part | Job | Depends on |
 |---|---|---|
 | `packages/ddb-import` | Converts raw D&D Beyond JSON into the app's `Character` format. All D&D Beyond quirks live here | Nothing |
+| `packages/model` | Shared types and constants: `Character`, `Ability`, ability and skill names | Nothing |
 | `packages/rules` | Sheet maths, action economy, suggestion engine. Pure functions with no network or UI code | The `Character` format |
 | `apps/web` | React + Vite PWA: screens, taps, local turn state, sync | Both packages, Supabase |
 | `supabase/` | Auth, Postgres tables with row-level security, one Edge Function for import | Nothing of ours |
@@ -139,7 +140,7 @@ interface Ability {
 }
 ```
 
-**Ability key:** `{kind}:{definitionId}:{grantingComponentId or "base"}`. The granting component is part of the key because the same spell can arrive twice with different costs, for example Misty Step cast with a slot and Misty Step cast free through a subclass feature. Custom abilities use a UUID.
+**Ability key:** `{kind}:{definitionId}:{grantingComponentId or "base"}`. Spells add a fourth part, `slot`, `free` or `atwill`, because one feature can grant the same spell twice with different costs: Misty Step cast with a slot and Misty Step cast free through a subclass feature. Custom abilities created in the app use a UUID.
 
 **Tag mapping from D&D Beyond spell tags:** `Damage`→damage, `Healing`→healing, `Buff`→buff, `Debuff`→debuff, `Control`→control, `Teleportation`→movement, `Warding`→defence, `Social` and `Deception`→social, `Combat`→ignored, anything else→utility.
 
@@ -324,7 +325,7 @@ Both views are phone first.
 Each milestone is usable on its own and gets its own implementation plan.
 
 1. **Import and sheet maths**, verified against every available fixture (eight characters across eight classes as of 2026-11-11). Curated tags for all twelve classes are written in milestone 4, where they are first used.
-2. **Both views with turn and resource tracking**, stored on the device only.
+2. **Both views with turn and resource tracking**, stored on the device only. Includes the import Edge Function, which the browser needs to fetch a character.
 3. **Accounts, saved characters and overlays** (edit, reorder, hide, add custom).
 4. **Suggestions:** turn plans, situation chips, feedback and usage learning.
 5. **Offline support and install to home screen.**
