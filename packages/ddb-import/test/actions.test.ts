@@ -41,8 +41,11 @@ describe('actions', () => {
     });
   });
 
-  it.each(SLUGS)('gives every action a unique key: %s', (slug) => {
-    const keys = convertCharacter(loadRaw(slug)).actions.map((a) => a.key);
-    expect(new Set(keys).size).toBe(keys.length);
+  it.each(SLUGS)('drops no action: %s', (slug) => {
+    const d = loadRaw(slug).data;
+    const expected =
+      Object.values(d.actions ?? {}).reduce((n: number, list: any) => n + (list ?? []).length, 0) +
+      (d.customActions ?? []).length;
+    expect(convertCharacter(loadRaw(slug)).actions).toHaveLength(expected);
   });
 });

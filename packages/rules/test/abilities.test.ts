@@ -90,9 +90,9 @@ describe('buildAbilities: other characters', () => {
     });
   });
 
-  it.each(SLUGS)('gives every ability a unique key: %s', (slug) => {
-    const keys = buildAbilities(convertCharacter(loadRaw(slug))).map((a) => a.key);
-    expect(new Set(keys).size).toBe(keys.length);
+  it.each(SLUGS)('drops no ability: %s', (slug) => {
+    const c = convertCharacter(loadRaw(slug));
+    expect(buildAbilities(c)).toHaveLength(c.weapons.length + 1 + c.spells.length + c.actions.length);
   });
 });
 

@@ -49,8 +49,18 @@ describe('spells', () => {
     expect(convertCharacter(loadRaw('minkis')).spells.find((s) => s.name === 'Enlarge/Reduce')).toBeUndefined();
   });
 
-  it.each(SLUGS)('gives every spell a unique key: %s', (slug) => {
-    const keys = convertCharacter(loadRaw(slug)).spells.map((s) => s.key);
-    expect(new Set(keys).size).toBe(keys.length);
+  it.each(SLUGS)('drops no spell: %s', (slug) => {
+    const d = loadRaw(slug).data;
+    const active = new Set(
+      d.inventory
+        .filter((i: any) => i.equipped === true && !(i.definition.canAttune === true && i.isAttuned !== true))
+        .map((i: any) => i.definition.id),
+    );
+    const groups = Object.entries(d.spells ?? {}) as [string, any[] | null][];
+    const expected =
+      (d.classSpells ?? []).reduce((n: number, cs: any) => n + (cs.spells ?? []).length, 0) +
+      groups.reduce((n, [group, list]) =>
+        n + (list ?? []).filter((w) => group !== 'item' || active.has(w.componentId)).length, 0);
+    expect(convertCharacter(loadRaw(slug)).spells).toHaveLength(expected);
   });
 });
