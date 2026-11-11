@@ -47,6 +47,6 @@ See also "Known gaps carried forward" in `2026-11-11-milestone-1-import-and-shee
 
 - The `Character` format carries D&D Beyond vocabulary (modifier `type` and `subType` strings, `ddbTags`). A later PDF or manual importer would have to emit the same strings.
 
-## Owner decision outstanding
+## Resolved before the first push
 
-- Fixtures keep each character's D&D Beyond `id` and `readonlyUrl`, and one fixture keeps descriptive fields (age, hair and similar). While the sheets are public these lead to the live sheets and their owners' usernames. Decide whether to scrub them before the repository is pushed.
+- Fixtures originally kept each character's D&D Beyond `id` and `readonlyUrl`, and one kept descriptive fields. The sanitizer now replaces the ID everywhere and nulls the link and descriptive fields, and the unpushed history was rewritten so earlier versions of the fixture files were never published.

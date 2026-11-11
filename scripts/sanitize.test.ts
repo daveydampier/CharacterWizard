@@ -19,7 +19,7 @@ describe('sanitize', () => {
     };
     const out = sanitize(input) as any;
     expect(out.data).toMatchObject({
-      id: 5, name: 'Test', username: 'redacted', userId: 0,
+      id: 1, name: 'Test', username: 'redacted', userId: 0,
       campaign: null, decorations: null, notes: null, traits: null, socialName: null,
     });
     expect(out.data.race).toEqual({ fullName: 'Human', description: '[removed]', portraitAvatarUrl: null });
@@ -27,6 +27,35 @@ describe('sanitize', () => {
     expect(out.data.inventory[0].limitedUse.resetTypeDescription).toBe('[removed]');
     expect(out.data.inventory[0].definition.name).toBe('Sword');
     expect(input.data.username).toBe('someone');
+  });
+
+  it('removes the character ID, user ID, username, sheet link and descriptive fields everywhere', () => {
+    const input = {
+      data: {
+        id: 155000001, userId: 777000111, username: 'someplayer', name: 'Test',
+        readonlyUrl: 'https://dndbeyond.com/characters/155000001',
+        age: 30, eyes: 'green', hair: 'red', skin: 'pale', height: '6ft', weight: 180, gender: 'M', faith: 'None',
+        inventory: [{ id: 42, equippedEntityId: 155000001, quantity: 3 }],
+        modifiers: { race: [{ componentId: 155000001, value: 2 }] },
+        providedFrom: 'shared by someplayer (777000111) at /characters/155000001/builder',
+        stats: [{ id: 1, value: 15 }],
+      },
+    };
+    const out = sanitize(input) as any;
+    expect(out.data).toMatchObject({
+      id: 1, userId: 0, username: 'redacted', name: 'Test', readonlyUrl: null,
+      age: null, eyes: null, hair: null, skin: null, height: null, weight: null, gender: null, faith: null,
+    });
+    expect(out.data.inventory[0]).toEqual({ id: 42, equippedEntityId: 1, quantity: 3 });
+    expect(out.data.modifiers.race[0]).toEqual({ componentId: 1, value: 2 });
+    expect(out.data.stats).toEqual([{ id: 1, value: 15 }]);
+    const text = JSON.stringify(out);
+    for (const secret of ['155000001', '777000111', 'someplayer']) expect(text).not.toContain(secret);
+  });
+
+  it('leaves unrelated numbers alone when the character ID is small', () => {
+    const out = sanitize({ data: { id: 5, userId: 3, level: 5, slots: [3, 5] } }) as any;
+    expect(out.data).toEqual({ id: 1, userId: 0, level: 5, slots: [3, 5], username: 'redacted' });
   });
 
   it('removes prose under other free-text keys', () => {
@@ -45,7 +74,7 @@ describe('sanitize', () => {
     const out = sanitize({
       id: 5, name: 'Test', username: 'someone', userId: 123, campaign: { id: 9 }, notes: { backstory: 'private' },
     }) as any;
-    expect(out).toEqual({ id: 5, name: 'Test', username: 'redacted', userId: 0, campaign: null, notes: null });
+    expect(out).toEqual({ id: 1, name: 'Test', username: 'redacted', userId: 0, campaign: null, notes: null });
   });
 
   it('clears notes on custom items and character values', () => {
