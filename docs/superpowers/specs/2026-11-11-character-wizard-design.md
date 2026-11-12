@@ -430,3 +430,4 @@ The ability key and overlay model leave room for the first three without rework.
 | Sheet maths disagrees with D&D Beyond | Fixture tests against every available real sheet; every number is overridable |
 | Players must set sheets to Public | The import screen explains it and recognises the 403 response |
 | Until milestone 3 the Edge Function has no signed-in check | Accepted for milestone 2. It accepts only a numeric ID, fetches only the character-service URL, and returns only what a public sheet already exposes to anyone. It answers only listed origins. Milestone 3 adds the signed-in check |
+| Until milestone 3 a character and its play state live only in the browser's storage, which a browser may clear. Safari removes a site's stored data after seven days of browser use without a visit to it | Accepted for milestone 2. Re-importing restores the character; only what was spent is lost. Accounts (milestone 3) and the installed app (milestone 5) remove the limit |

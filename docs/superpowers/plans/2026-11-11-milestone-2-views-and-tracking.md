@@ -6197,7 +6197,7 @@ List several origins with commas and no spaces. An origin is scheme and host onl
 
 Open the Pages address on a phone. Import a character by pasting its D&D Beyond link. Expected: the Combat view opens. Then set a sheet to Private and try again. Expected: "This sheet is Private. Set Character Privacy to Public on D&D Beyond, then try again." with the hint under it.
 
-If the import says "Couldn't reach the import service.", the origin in `ALLOWED_ORIGINS` does not match the address in the phone's browser exactly.
+If the import says "Couldn't reach the import service.", check three things in this order: the origin in `ALLOWED_ORIGINS` matches the address in the phone's browser exactly; `VITE_SUPABASE_KEY` in Cloudflare Pages is the same publishable key the function checks; and the curl check in Step 4 still answers `400`, not `401` (a `401` there means the platform's JWT check or the function's key check is refusing the key, and Step 4 says what to change).
 
 ---
 
@@ -6228,3 +6228,10 @@ The code in the tasks above is the plan as written. Review during execution chan
 - The dev server's import endpoint and the app's error boundary have no unit test; Task 15 checks the endpoint by hand.
 - Two equipped copies of one item still share a key (milestone 3).
 - Descriptions with tables can be wider than a phone screen; the table scrolls with the row, not on its own.
+- A proficiency or expertise modifier that carries a restriction is applied to the number as well as listed as a note (`hasModifier` in `packages/rules/src/core.ts`, milestone 1 code). No fixture has one.
+- Nothing stops `@cw/rules` or `@cw/model` from using browser globals at compile time, because one `tsconfig.json` gives every package the DOM library. Review is the only guard.
+- Stored play state is not validated when it is read. Milestone 3 must normalise it at the storage boundary before sync writes to it.
+- A spent group in Combat dims its rows to 60% opacity, which lowers the contrast of the reason text.
+- Safari may clear on-device storage after seven days without a visit (spec section 17).
+- The app has not been opened on a real phone, and import by link has not been run against the real services. Task 16 covers both.
+- Review findings that were deferred are listed in `docs/superpowers/plans/2026-11-11-milestone-2-deferred-findings.md`.
