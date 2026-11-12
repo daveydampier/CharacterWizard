@@ -10,3 +10,5 @@ export * from './text';
 export * from './notes';
 export * from './universal';
 export * from './sheet';
+export * from './play';
+export * from './views';

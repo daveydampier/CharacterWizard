@@ -221,3 +221,21 @@ export interface Ability {
   notes: string[];
   tagSource: 'import' | 'curated' | 'user' | 'none';
 }
+
+/** Which parts of the current turn are used up. True means spent. */
+export interface TurnState {
+  action: boolean;
+  bonus: boolean;
+  reaction: boolean;
+  /** A spell slot was spent this turn; only one may be. */
+  slotSpentThisTurn: boolean;
+}
+
+/** Everything the app tracks during play. A new character starts with nothing spent. */
+export interface PlayState {
+  /** Pool key to the number spent. Keys: an ability or item key, `slot:1`..`slot:9`, or `pact`. */
+  spent: Record<string, number>;
+  /** Key of the ability being concentrated on. */
+  concentrationKey: string | null;
+  turn: TurnState;
+}
