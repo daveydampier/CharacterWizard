@@ -1,9 +1,24 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { emptyPlayState } from '@cw/rules';
 import { loadRaw } from '../../../test-utils/fixtures';
 import { memoryStorage, type AppStorage } from './storage';
 import { sheetFor, useStore } from './store';
 import { ability, rawWithId, seed } from './test/helpers';
+
+const sheetBuild = vi.hoisted(() => ({ fails: false }));
+
+vi.mock('@cw/rules', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@cw/rules')>();
+  return {
+    ...actual,
+    buildSheet: (...args: Parameters<typeof actual.buildSheet>) => {
+      if (sheetBuild.fails) throw new Error('sheet build failed');
+      return actual.buildSheet(...args);
+    },
+  };
+});
+
+const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
 const state = () => useStore.getState();
 
@@ -43,6 +58,30 @@ describe('saveImported', () => {
     expect(await state().saveImported({ hello: 'world' })).toBeNull();
     expect(await state().saveImported('nonsense')).toBeNull();
     expect(state().characters).toEqual([]);
+  });
+
+  it('makes an ID without crypto.randomUUID, as on a page served over plain HTTP', async () => {
+    const real = globalThis.crypto;
+    vi.stubGlobal('crypto', { getRandomValues: <T extends ArrayBufferView>(array: T): T => real.getRandomValues(array as any) });
+    await state().init(memoryStorage());
+    const first = await state().saveImported(rawWithId('vlad', 101));
+    const second = await state().saveImported(rawWithId('minkis', 102));
+    expect(first?.id).toMatch(UUID_V4);
+    expect(second?.id).toMatch(UUID_V4);
+    expect(first?.id).not.toBe(second?.id);
+  });
+
+  it('refuses a character whose sheet cannot be built, and stores nothing', async () => {
+    const storage = memoryStorage();
+    await state().init(storage);
+    sheetBuild.fails = true;
+    try {
+      expect(await state().saveImported(loadRaw('vlad'))).toBeNull();
+    } finally {
+      sheetBuild.fails = false;
+    }
+    expect(state().characters).toEqual([]);
+    expect(await storage.listCharacters()).toEqual([]);
   });
 
   it('keeps two different characters apart', async () => {
@@ -102,6 +141,18 @@ describe('open', () => {
     expect(state().play.spent).toEqual({ pact: 1 });
     expect(state().play.turn.bonus).toBe(true);
     expect(state().undo).toBeNull();
+  });
+
+  it('keeps the play state in memory when the open character is opened again', async () => {
+    const storage = memoryStorage();
+    const record = await seed('vlad', storage);
+    storage.putPlay = async () => { throw new Error('quota'); };
+    state().use(ability('Hex'), 'combat');
+    await settle();
+    expect(state().persistent).toBe(false);
+    await state().open(record.id);
+    expect(state().openId).toBe(record.id);
+    expect(state().play.spent).toEqual({ pact: 1 });
   });
 
   it('opens nothing for an unknown ID', async () => {

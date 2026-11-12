@@ -5,6 +5,9 @@ import { navigate, routeHref } from '../router';
 import { useStore } from '../store';
 
 const NOT_A_CHARACTER = "That doesn't look like a D&D Beyond character.";
+const SAVE_FAILED = "Couldn't add this character. Try again.";
+const READ_FAILED = "Couldn't read that file.";
+const PASTE_HINT = 'You can paste the character JSON below instead.';
 
 export function ImportScreen() {
   const saveImported = useStore((s) => s.saveImported);
@@ -13,6 +16,7 @@ export function ImportScreen() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hint, setHint] = useState<string | null>(null);
+  const [pasteOpen, setPasteOpen] = useState(false);
 
   const fail = (message: string, extra: string | null = null): void => {
     setError(message);
@@ -21,7 +25,12 @@ export function ImportScreen() {
 
   /** Stores the raw JSON and opens the character, or says why it could not. */
   async function store(raw: unknown): Promise<void> {
-    const record = await saveImported(raw);
+    let record;
+    try {
+      record = await saveImported(raw);
+    } catch {
+      return fail(SAVE_FAILED);
+    }
     if (!record) return fail(NOT_A_CHARACTER);
     navigate({ name: 'character', id: record.id, view: 'combat' });
   }
@@ -36,6 +45,11 @@ export function ImportScreen() {
     const result = await fetchCharacter(id);
     setBusy(false);
     if (result.status === 'ok') return store(result.raw);
+    if (result.status === 'unreachable' || result.status === 'upstream-error') {
+      // The service can't get the sheet: point to the fallback and open it.
+      setPasteOpen(true);
+      return fail(IMPORT_MESSAGES[result.status], PASTE_HINT);
+    }
     fail(IMPORT_MESSAGES[result.status], result.status === 'private' ? PRIVACY_HINT : null);
   }
 
@@ -82,7 +96,11 @@ export function ImportScreen() {
         </div>
       ) : null}
 
-      <details className="mt-6 rounded-lg border border-slate-200 bg-white p-3">
+      <details
+        open={pasteOpen}
+        onToggle={(event) => setPasteOpen(event.currentTarget.open)}
+        className="mt-6 rounded-lg border border-slate-200 bg-white p-3"
+      >
         <summary className="cursor-pointer text-sm font-medium">Paste the character JSON instead</summary>
         <p className="mt-2 text-xs text-slate-600">
           Use this if the import can't reach D&D Beyond. Paste the JSON, or choose a saved file.
@@ -109,7 +127,9 @@ export function ImportScreen() {
           accept="application/json,.json"
           onChange={(event) => {
             const file = event.target.files?.[0];
-            if (file) void file.text().then(importJson);
+            // Cleared so that choosing the same file again is a change too.
+            event.target.value = '';
+            if (file) void file.text().then(importJson, () => fail(READ_FAILED));
           }}
           className="mt-1 block w-full text-sm"
         />

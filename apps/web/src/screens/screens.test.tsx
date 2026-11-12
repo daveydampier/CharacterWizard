@@ -149,6 +149,60 @@ describe('Import screen', () => {
     expect(await screen.findByRole('heading', { name: 'Sid' })).toBeInTheDocument();
   });
 
+  it.each([
+    [502, 'upstream-error'],
+    [500, 'unreachable'],
+  ])('points to the paste fallback and opens it after a %i %s answer', async (httpStatus, status) => {
+    await emptyApp();
+    renderAt({ name: 'import' });
+    stubFetch(() => json(httpStatus, { status }));
+    await userEvent.type(linkField(), '42');
+    await userEvent.click(screen.getByRole('button', { name: 'Import' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('You can paste the character JSON below instead.');
+    expect(screen.getByText('Paste the character JSON instead').closest('details')).toHaveAttribute('open');
+  });
+
+  it('keeps the paste section closed and gives no paste hint for a Private sheet', async () => {
+    await emptyApp();
+    renderAt({ name: 'import' });
+    stubFetch(() => json(403, { status: 'private' }));
+    await userEvent.type(linkField(), '42');
+    await userEvent.click(screen.getByRole('button', { name: 'Import' }));
+    expect(await screen.findByRole('alert')).not.toHaveTextContent('You can paste the character JSON below instead.');
+    expect(screen.getByText('Paste the character JSON instead').closest('details')).not.toHaveAttribute('open');
+  });
+
+  it('says so when the character cannot be saved, whichever way it came in', async () => {
+    await emptyApp();
+    const original = useStore.getState().saveImported;
+    useStore.setState({ saveImported: async () => { throw new Error('storage broke'); } });
+    try {
+      renderAt({ name: 'import' });
+      stubFetch(() => json(200, { status: 'ok', raw: loadRaw('vlad') }));
+      await userEvent.type(linkField(), '42');
+      await userEvent.click(screen.getByRole('button', { name: 'Import' }));
+      expect(await screen.findByRole('alert')).toHaveTextContent("Couldn't add this character. Try again.");
+      expect(screen.getByRole('button', { name: 'Import' })).toBeEnabled();
+
+      fireEvent.change(screen.getByLabelText('Character JSON'), { target: { value: '{"data":{"id":7,"name":"Blank"}}' } });
+      await userEvent.click(screen.getByRole('button', { name: 'Use this JSON' }));
+      expect(screen.getByRole('alert')).toHaveTextContent("Couldn't add this character. Try again.");
+    } finally {
+      useStore.setState({ saveImported: original });
+    }
+  });
+
+  it('says so when the chosen file cannot be read, and lets the same file be chosen again', async () => {
+    await emptyApp();
+    renderAt({ name: 'import' });
+    const file = new File(['{}'], 'broken.json', { type: 'application/json' });
+    file.text = () => Promise.reject(new Error('unreadable'));
+    const input = screen.getByLabelText('Or choose a JSON file') as HTMLInputElement;
+    await userEvent.upload(input, file);
+    expect(await screen.findByRole('alert')).toHaveTextContent("Couldn't read that file.");
+    expect(input.value).toBe('');
+  });
+
   it('explains pasted text that is not JSON or not a character', async () => {
     await emptyApp();
     renderAt({ name: 'import' });

@@ -56,6 +56,19 @@ export function sheetFor(character: StoredCharacter): Sheet {
   return sheet;
 }
 
+/**
+ * A random version 4 UUID. Browsers offer `crypto.randomUUID` only on secure pages, so a phone
+ * reaching the dev server over the local network builds one from random bytes instead.
+ */
+function newId(): string {
+  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40; // version 4
+  bytes[8] = (bytes[8] & 0x3f) | 0x80; // RFC 4122 variant
+  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
 const initial = {
   ready: false,
   persistent: true,
@@ -107,12 +120,18 @@ export const useStore = create<AppStore>()((set, get) => {
       // An ID of 0 means the JSON had none, so it can never match a stored character.
       const existing = ddbId === '0' ? undefined : get().characters.find((c) => c.ddbId === ddbId);
       const record: StoredCharacter = {
-        id: existing?.id ?? crypto.randomUUID(),
+        id: existing?.id ?? newId(),
         ddbId,
         name: converted.name || 'Unnamed character',
         rawJson: raw,
         importedAt: new Date().toISOString(),
       };
+      try {
+        sheetFor(record);
+      } catch {
+        // Converted, but the sheet cannot be built from it: treat it as not a character.
+        return null;
+      }
       await save(storage.putCharacter(record));
       set({ characters: [...get().characters.filter((c) => c.id !== record.id), record] });
       if (existing) {
@@ -143,6 +162,8 @@ export const useStore = create<AppStore>()((set, get) => {
         set({ openId: null, sheet: null, play: emptyPlayState(), undo: null });
         return;
       }
+      // Already open: the play state in memory is the newest copy, even if saving it failed.
+      if (get().openId === id && get().sheet) return;
       const sheet = sheetFor(character);
       set({ openId: id, sheet, play: emptyPlayState(), undo: null });
       const saved = await storage.getPlay(id).catch(() => null);
