@@ -2,6 +2,7 @@ import type { Ability } from '@cw/model';
 import { TIMING_LABEL, combatGroups, pools, type Sheet, type TurnTiming } from '@cw/rules';
 import { useMemo, type ReactNode } from 'react';
 import { AbilityRow } from '../components/AbilityRow';
+import { ConcentrationBanner } from '../components/ConcentrationBanner';
 import { NotesList } from '../components/NotesList';
 import { ResourceChips } from '../components/ResourceChips';
 import { useAbilityUse } from '../components/useAbilityUse';
@@ -45,9 +46,6 @@ export function CombatView({ sheet }: { sheet: Sheet }) {
   const { request, slotSheet } = useAbilityUse('combat');
   const groups = useMemo(() => combatGroups(sheet), [sheet]);
   const allPools = useMemo(() => pools(sheet), [sheet]);
-  const concentration = play.concentrationKey
-    ? sheet.abilities.find((a) => a.key === play.concentrationKey)?.name ?? null
-    : null;
 
   const rows = (abilities: Ability[]): ReactNode =>
     abilities.map((ability) => (
@@ -86,12 +84,7 @@ export function CombatView({ sheet }: { sheet: Sheet }) {
 
       <ResourceChips pools={allPools} state={play} onAdjust={(pool, delta) => adjust(pool.key, delta)} />
 
-      {concentration ? (
-        <p role="status" className="mt-3 flex items-center justify-between rounded-lg bg-amber-100 px-3 py-2 text-sm text-amber-900">
-          <span>Concentrating on {concentration}</span>
-          <button type="button" onClick={endConcentration} className="underline">End</button>
-        </p>
-      ) : null}
+      <ConcentrationBanner sheet={sheet} concentrationKey={play.concentrationKey} onEnd={endConcentration} />
 
       <Group
         title="Action"

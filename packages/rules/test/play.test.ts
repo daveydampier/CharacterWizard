@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { convertCharacter } from '@cw/ddb-import';
 import type { Ability, PlayState } from '@cw/model';
 import {
-  PACT_KEY, adjustPool, applyUse, availability, buildSheet, clampState, costLabel, emptyPlayState,
+  PACT_KEY, adjustPool, applyUse, availability, buildSheet, clampState, concentrationName, costLabel, emptyPlayState,
   endConcentration, pools, remaining, rest, slotKey, startTurn, togglePill, useSummary, type Sheet,
 } from '../src/index';
 import { SLUGS, loadRaw, type Slug } from '../../../test-utils/fixtures';
@@ -92,6 +92,22 @@ describe('availability and applyUse in combat', () => {
     expect(availability(slotMisty, vlad, afterStep)).toMatchObject({
       canUse: false, reason: 'You already used your Bonus Action this turn.',
     });
+  });
+
+  it('blocks a second Action and a second Reaction and says why', () => {
+    const afterBlast = applyUse(blast, vlad, emptyPlayState());
+    expect(availability(find(vlad, 'Dash'), vlad, afterBlast)).toMatchObject({
+      canUse: false, reason: 'You already used your Action this turn.',
+    });
+    const afterRebuke = applyUse(rebuke, vlad, emptyPlayState());
+    expect(availability(find(vlad, 'Hellish Rebuke', 'uses'), vlad, afterRebuke)).toMatchObject({
+      canUse: false, reason: 'You already used your Reaction this round.',
+    });
+  });
+
+  it('names the ability being concentrated on, or nothing when the key matches none', () => {
+    expect(concentrationName(vlad, hex.key)).toBe('Hex');
+    expect(concentrationName(vlad, 'not-there')).toBeNull();
   });
 
   it('lets a Reaction spell ignore and not set the one-slot rule', () => {

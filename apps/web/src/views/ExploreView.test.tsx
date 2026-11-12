@@ -108,6 +108,26 @@ describe('Explore view', () => {
     expect(useStore.getState().play.spent).toEqual({ [wind.key]: 1 });
   });
 
+  it('shows concentration started here, and ends it', async () => {
+    await openExplore('vlad');
+    const force = within(region('Out of combat abilities')).getByRole('article', { name: 'Phantasmal Force' });
+    await userEvent.click(within(force).getByRole('button', { name: 'Use Phantasmal Force' }));
+    expect(screen.getByText('Concentrating on Phantasmal Force')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'End' }));
+    expect(screen.queryByText('Concentrating on Phantasmal Force')).toBeNull();
+    expect(useStore.getState().play.concentrationKey).toBeNull();
+  });
+
+  it('keeps concentration endable when it names no ability on the sheet', async () => {
+    const record = await seed('vlad');
+    useStore.setState({ play: { ...useStore.getState().play, concentrationKey: 'not-there' } });
+    render(<CharacterScreen id={record.id} view="explore" />);
+    expect(await screen.findByText('Concentrating')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'End' }));
+    expect(screen.queryByText('Concentrating')).toBeNull();
+    expect(useStore.getState().play.concentrationKey).toBeNull();
+  });
+
   it('marks rituals and abilities that take a minute or more', async () => {
     await openExplore('minkis');
     const list = region('Out of combat abilities');

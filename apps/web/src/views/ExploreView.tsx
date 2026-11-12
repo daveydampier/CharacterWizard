@@ -2,6 +2,7 @@ import { ABILITIES, SKILLS, type ProficiencyLevel } from '@cw/model';
 import { abilityLabel, exploreAbilities, pools, rollLine, skillLabel, type Note, type Sheet } from '@cw/rules';
 import { useMemo, useState, type ReactNode } from 'react';
 import { AbilityRow } from '../components/AbilityRow';
+import { ConcentrationBanner } from '../components/ConcentrationBanner';
 import { NotesList } from '../components/NotesList';
 import { ResourceChips } from '../components/ResourceChips';
 import { useAbilityUse } from '../components/useAbilityUse';
@@ -84,6 +85,7 @@ export function ExploreView({ sheet }: { sheet: Sheet }) {
   const play = useStore((s) => s.play);
   const adjust = useStore((s) => s.adjust);
   const rest = useStore((s) => s.rest);
+  const endConcentration = useStore((s) => s.endConcentration);
   const { request, slotSheet } = useAbilityUse('explore');
   const [query, setQuery] = useState('');
   const needle = query.trim().toLowerCase();
@@ -130,6 +132,7 @@ export function ExploreView({ sheet }: { sheet: Sheet }) {
       />
 
       <ResourceChips pools={allPools} state={play} onAdjust={(pool, delta) => adjust(pool.key, delta)} />
+      <ConcentrationBanner sheet={sheet} concentrationKey={play.concentrationKey} onEnd={endConcentration} />
 
       {nothing ? <p className="mt-4 text-sm text-slate-600">Nothing matches "{query.trim()}".</p> : null}
 

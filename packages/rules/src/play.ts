@@ -90,8 +90,9 @@ function slotOptions(ability: Ability, sheet: Sheet, state: PlayState): SlotOpti
   return out;
 }
 
-function concentrationName(sheet: Sheet, key: string): string {
-  return sheet.abilities.find((a) => a.key === key)?.name ?? 'current concentration';
+/** The name of the ability being concentrated on, or null when the key matches no ability. */
+export function concentrationName(sheet: Sheet, key: string): string | null {
+  return sheet.abilities.find((a) => a.key === key)?.name ?? null;
 }
 
 export function availability(ability: Ability, sheet: Sheet, state: PlayState, mode: ViewMode = 'combat'): Availability {
@@ -100,7 +101,7 @@ export function availability(ability: Ability, sheet: Sheet, state: PlayState, m
   const options = slotOptions(ability, sheet, state);
   const current = state.concentrationKey;
   const ends = ability.concentration && current !== null && current !== ability.key
-    ? concentrationName(sheet, current)
+    ? concentrationName(sheet, current) ?? 'current concentration'
     : null;
   const blocked = (reason: string | null): Availability => ({ hasUse, canUse: false, reason, slotOptions: options, ends });
 
