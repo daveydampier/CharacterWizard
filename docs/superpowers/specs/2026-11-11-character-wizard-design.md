@@ -196,7 +196,7 @@ Overlays are keyed by ability key, so a re-import keeps every correction and ord
 
 ### 5.3 On-device storage (milestone 2 onward)
 
-One IndexedDB database, `character-wizard`, behind a `Storage` interface so that milestone 3 can add sync behind the same calls.
+One IndexedDB database, `character-wizard`, behind an `AppStorage` interface so that milestone 3 can add sync behind the same calls. (`Storage` is already the browser's name for localStorage.)
 
 | Store | Record |
 |---|---|
@@ -210,11 +210,11 @@ If IndexedDB is unavailable (private browsing, quota), the app says so and keeps
 ## 6. Import flow
 
 1. The player pastes a D&D Beyond character URL or ID. The client extracts the numeric ID and rejects anything else. A URL may carry a query string or fragment.
-2. The client posts `{ "id": "<digits>" }` to the `import-character` Edge Function. It accepts only 1 to 12 digits and requests only the character-service URL above. It sends no cookies or spoofed headers. It answers `{ "status": "ok", "raw": ... }`, or a status of `private`, `not-found`, `upstream-error` or `bad-request`.
+2. The client posts `{ "id": "<digits>" }` to the `import-character` Edge Function. It accepts only 1 to 12 digits and requests only the character-service URL above. It sends no cookies or spoofed headers. It answers `{ "status": "ok", "raw": ... }`, or a status of `private`, `not-found`, `upstream-error`, `bad-request` or `unauthorized`.
 3. The raw JSON is stored (on the device in milestone 2; in `characters.raw_json` from milestone 3). Conversion to `Character` runs in the browser on load, so converter fixes apply to existing characters without a re-import.
 4. As a fallback, the import screen accepts the character JSON pasted or uploaded as a file.
 
-**Access before accounts exist (milestone 2):** the function is callable with the project's public key and answers only the origins listed in its `ALLOWED_ORIGINS` setting. From milestone 3 it requires a signed-in user.
+**Access before accounts exist (milestone 2):** the caller sends the project's publishable key in the `apikey` header and the function checks it. The function answers a browser only from the origins listed in its `ALLOWED_ORIGINS` setting. From milestone 3 it requires a signed-in user.
 
 **Local development:** the Vite dev server mounts the same handler at `/functions/v1/import-character`, so no Supabase project is needed to run the app locally.
 
@@ -259,7 +259,7 @@ Not calculated: effects that exist only in description text, hit points, conditi
 
 **Rests:** Short Rest restores short-rest resources and Pact Magic slots. Long Rest restores everything and clears concentration. Item charges that reset at dawn are restored on a Long Rest. Consumables never reset. A pool whose reset type the import did not recognise is left alone; the player restores it by hand. Both rests also reset the turn.
 
-**Undo:** one step. It reverses the last Use, Start my turn or rest.
+**Undo:** one step. It reverses the last Use, Start my turn or rest. A manual change (a pill, a pip, ending concentration) clears the undo step, so undo only ever reverses the most recent change.
 
 **Manual control:** the player can flip any of the three turn pills and can spend or restore one use of any pool by tapping its pips. This is how the player handles anything the app cannot model: Action Surge granting a second Action, a homebrew feature described only in text, or a mistake.
 
@@ -344,6 +344,7 @@ Both views are phone first. Each is one scrolling page.
 
 - A note that belongs to a skill or a saving throw sits on that row: "Advantage (roll twice, keep the higher)." or "Advantage: {condition}".
 - Every other note goes in a "Keep in mind" list, open in Explore and collapsed in Combat.
+- Combat has no skill or saving throw rows, so its "Keep in mind" list also carries those notes, each prefixed with its subject ("Constitution save: Advantage: ...").
 
 ### 10.2 Explore (non-combat)
 
