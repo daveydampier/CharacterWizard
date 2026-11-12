@@ -25,7 +25,12 @@ function spellRange(wrapper: Raw, def: Raw): string | null {
   return str(range.origin) || null;
 }
 
-function spellEntry(wrapper: Raw, characterLevel: number, itemKey: string | null): SpellEntry | null {
+interface GrantingItem {
+  key: string;
+  name: string;
+}
+
+function spellEntry(wrapper: Raw, characterLevel: number, item: GrantingItem | null): SpellEntry | null {
   const def = obj(wrapper.definition);
   const id = num(def.id);
   if (id === null) return null;
@@ -33,7 +38,8 @@ function spellEntry(wrapper: Raw, characterLevel: number, itemKey: string | null
   const uses = limitedUseFrom(wrapper.limitedUse);
   const usesSlot = level > 0 && wrapper.usesSpellSlot === true;
   const component = num(wrapper.componentId) || 'base';
-  const costKind = usesSlot ? 'slot' : uses || itemKey ? 'free' : 'atwill';
+  // An item-granted spell is always keyed `item`, whatever D&D Beyond's slot flag says.
+  const costKind = item ? 'item' : usesSlot ? 'slot' : uses ? 'free' : 'atwill';
   return {
     key: `spell:${id}:${component}:${costKind}`,
     name: str(def.name),
@@ -50,19 +56,31 @@ function spellEntry(wrapper: Raw, characterLevel: number, itemKey: string | null
     usesSlot,
     castingAbility: abilityFromStatId(wrapper.spellCastingAbilityId),
     uses,
-    itemKey,
+    itemKey: item?.key ?? null,
+    itemName: item?.name ?? null,
     description: str(def.description),
   };
 }
 
-/** The granting item's key for a spell in the `spells.item` group, or null if that item is not active. */
-function grantingItemKey(wrapper: Raw, active: Set<number>): string | null {
+/** The granting item for a spell in the `spells.item` group, or null if that item is not active. */
+function grantingItem(wrapper: Raw, active: Set<number>, names: Map<number, string>): GrantingItem | null {
   const id = num(wrapper.componentId);
-  return id !== null && active.has(id) ? `item:${id}:base` : null;
+  return id !== null && active.has(id) ? { key: `item:${id}:base`, name: names.get(id) ?? '' } : null;
+}
+
+function itemNames(d: Raw): Map<number, string> {
+  const names = new Map<number, string>();
+  for (const item of arr(d.inventory)) {
+    const def = obj(item?.definition);
+    const id = num(def.id);
+    if (id !== null && !names.has(id)) names.set(id, str(def.name));
+  }
+  return names;
 }
 
 export function convertSpells(d: Raw, characterLevel: number): SpellEntry[] {
   const active = activeItemIds(d);
+  const names = itemNames(d);
   const wrappers: { wrapper: Raw; fromItem: boolean }[] = [
     ...arr(d.classSpells).flatMap((cs) => arr(cs?.spells)).map((w) => ({ wrapper: obj(w), fromItem: false })),
     ...Object.entries(obj(d.spells)).flatMap(([group, list]) =>
@@ -71,10 +89,10 @@ export function convertSpells(d: Raw, characterLevel: number): SpellEntry[] {
   const seen = new Set<string>();
   const out: SpellEntry[] = [];
   for (const { wrapper, fromItem } of wrappers) {
-    const itemKey = fromItem ? grantingItemKey(wrapper, active) : null;
+    const item = fromItem ? grantingItem(wrapper, active, names) : null;
     // A spell from an item that is not equipped (and attuned, if attunable) is not available.
-    if (fromItem && !itemKey) continue;
-    const entry = spellEntry(wrapper, characterLevel, itemKey);
+    if (fromItem && !item) continue;
+    const entry = spellEntry(wrapper, characterLevel, item);
     if (!entry || seen.has(entry.key)) continue;
     seen.add(entry.key);
     out.push(entry);

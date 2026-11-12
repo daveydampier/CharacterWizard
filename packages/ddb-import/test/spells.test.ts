@@ -40,9 +40,18 @@ describe('spells', () => {
 
   it('links an item-granted spell to its item and ignores the placeholder pool', () => {
     const ray = convertCharacter(loadRaw('maya')).spells.find((s) => s.name === 'Scorching Ray');
-    expect(ray).toMatchObject({ itemKey: 'item:10968023:base', uses: null });
-    expect(ray?.key.endsWith(':free')).toBe(true);
-    expect(vlad.every((s) => s.itemKey === null)).toBe(true);
+    expect(ray).toMatchObject({ itemKey: 'item:10968023:base', itemName: 'Shepherds Staff', uses: null });
+    expect(ray?.key.endsWith(':item')).toBe(true);
+    expect(vlad.every((s) => s.itemKey === null && s.itemName === null)).toBe(true);
+  });
+
+  it('keys an item-granted spell as item even when it is flagged as using a spell slot', () => {
+    const raw = loadRaw('maya');
+    const wrapper = raw.data.spells.item.find((w: any) => w.definition.name === 'Scorching Ray');
+    wrapper.usesSpellSlot = true;
+    const ray = convertCharacter(raw).spells.find((s) => s.name === 'Scorching Ray');
+    expect(ray?.key.endsWith(':item')).toBe(true);
+    expect(ray?.usesSlot).toBe(true);
   });
 
   it('skips a spell granted by an item that is not active', () => {

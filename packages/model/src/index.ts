@@ -79,6 +79,7 @@ export interface CharacterClass {
 }
 
 export interface DamagePart {
+  /** A dice expression ("1d8+3") or a flat number ("4", "0"). */
   dice: string;
   type: string | null;
 }
@@ -98,7 +99,10 @@ export interface Weapon {
   isPactWeapon: boolean;
   extraDamage: DamagePart[];
   properties: string[];
+  /** Null when the weapon has no charge pool, or needs attunement and is not attuned. */
   uses: LimitedUse | null;
+  /** True when the item needs attunement and is not attuned: its magic properties are off. */
+  unattuned: boolean;
 }
 
 export interface Armor {
@@ -126,6 +130,8 @@ export interface SpellEntry {
   uses: LimitedUse | null;
   /** Key of the item that grants this spell (`item:<definitionId>:base`); null if not item-granted. */
   itemKey: string | null;
+  /** Name of the item that grants this spell; null if not item-granted. */
+  itemName: string | null;
   description: string;
 }
 

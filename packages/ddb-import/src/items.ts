@@ -41,7 +41,8 @@ export function convertWeapons(d: Raw): Weapon[] {
       magicBonus: effective ? grantedBonus(def, 'magic') : 0,
       isPactWeapon: pact.has(String(item.id)),
       extraDamage: effective ? extraDamage(def) : [],
-      uses: limitedUseFrom(item.limitedUse),
+      uses: effective ? limitedUseFrom(item.limitedUse) : null,
+      unattuned: !effective,
     };
     if (def.filterType === 'Weapon') {
       const properties = arr(def.properties).map((p) => str(p?.name));
