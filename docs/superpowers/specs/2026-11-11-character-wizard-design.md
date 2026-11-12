@@ -214,7 +214,7 @@ If IndexedDB is unavailable (private browsing, quota), the app says so and keeps
 3. The raw JSON is stored (on the device in milestone 2; in `characters.raw_json` from milestone 3). Conversion to `Character` runs in the browser on load, so converter fixes apply to existing characters without a re-import.
 4. As a fallback, the import screen accepts the character JSON pasted or uploaded as a file.
 
-**Access before accounts exist (milestone 2):** the caller sends the project's publishable key in the `apikey` header and the function checks it. The function answers a browser only from the origins listed in its `ALLOWED_ORIGINS` setting. From milestone 3 it requires a signed-in user.
+**Access before accounts exist (milestone 2):** the caller sends the project's publishable key in the `apikey` header and the function checks it. If the deployed function has no key to check against, it refuses every request rather than skipping the check. The function answers a browser only from the origins listed in its `ALLOWED_ORIGINS` setting. From milestone 3 it requires a signed-in user.
 
 **Local development:** the Vite dev server mounts the same handler at `/functions/v1/import-character`, so no Supabase project is needed to run the app locally.
 
@@ -225,7 +225,7 @@ If IndexedDB is unavailable (private browsing, quota), the app says so and keeps
 | Anything else | "D&D Beyond didn't respond as expected". The saved copy keeps working |
 | The function cannot be reached | "Couldn't reach the import service", with the paste fallback |
 
-**Re-import** replaces the raw JSON, keeps overlays and custom abilities, clamps each spent count to the new maximum, drops pools that no longer exist, and clears concentration if that ability is gone.
+**Re-import** replaces the raw JSON, keeps overlays and custom abilities, clamps each spent count to the new maximum, drops pools that no longer exist, and clears concentration if that ability is gone. For the character that is open, the play state in memory is the newest copy and is the one clamped and kept.
 
 ## 7. Sheet maths
 
@@ -334,7 +334,7 @@ Both views are phone first. Each is one scrolling page.
 **Roll lines** are short sentences generated from `Roll`. Ability names are spelled out.
 
 - Attack: "Roll d20 + 5. Hit: 1d8 + 3 piercing. Extra: 1d6 poison (see the item)."
-- Save: "They roll a Strength save against DC 13. Fail: 2d6 necrotic."
+- Save: "They roll a Strength save against DC 13. Fail: 2d6 necrotic." ("an" before a vowel: "an Intelligence save".)
 - Damage only: "Damage: 1d6 necrotic."
 - Dice only: "Roll 1d10 + 9."
 - Check: "Roll d20 + 3."

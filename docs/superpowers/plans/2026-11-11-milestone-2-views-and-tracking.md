@@ -6113,8 +6113,6 @@ verify_jwt = true
 
 If a later `supabase` command rejects this file, delete it, run `pnpm dlx supabase init` to generate a full one, and add the `[functions.import-character]` block above to the generated file.
 
-If a later `supabase` command rejects this file, delete it, run `pnpm dlx supabase init` to generate a full one, and add the `[functions.import-character]` block above to the generated file.
-
 Commit:
 
 ```bash
@@ -6156,6 +6154,12 @@ Expected: `400` and `{"status":"bad-request"}`. The request has no `Origin` head
 
 If the answer is `401` with a message about a missing or invalid JWT, the platform's own check is rejecting the publishable key. Change `verify_jwt = true` to `verify_jwt = false` in `supabase/config.toml`, deploy again and commit the change. The function still checks the key itself.
 
+If the answer is `401` with the body `{"status":"unauthorized"}`, the request reached the function and the function found no key to check against: the platform did not provide `SUPABASE_PUBLISHABLE_KEYS`. Give the function the publishable key under its fallback name, then run the check again:
+
+```bash
+pnpm dlx supabase secrets set IMPORT_API_KEY=<publishable key>
+```
+
 Then fetch a real public character, using a sheet you own that is set to Public:
 
 ```bash
@@ -6196,6 +6200,15 @@ Open the Pages address on a phone. Import a character by pasting its D&D Beyond 
 If the import says "Couldn't reach the import service.", the origin in `ALLOWED_ORIGINS` does not match the address in the phone's browser exactly.
 
 ---
+
+## Changes made during execution
+
+The code in the tasks above is the plan as written. Review during execution changed four things; the repository is the record.
+
+- **Task 3, save roll line.** The article is chosen from the ability's name, so the line reads "They roll an Intelligence save against DC 13." A private `article` helper in `packages/rules/src/text.ts` does this, with one added test.
+- **Task 7, the key check fails closed.** `ImportOptions` gained `requireKey?: boolean`. When it is true and no key is configured, the handler answers every request with 401 `unauthorized`. The Edge Function entry sets it and reads the key from `SUPABASE_PUBLISHABLE_KEYS`, falling back to an `IMPORT_API_KEY` secret. The dev server does not set it.
+- **Task 10, re-importing the open character.** `saveImported` clamps and keeps the play state in memory when the re-imported character is the open one, and uses the stored copy only when it is not open. The test "replaces the character on re-import and clamps what was spent" sets the over-spent state in the store, not in storage, and two tests were added.
+- **Task 16, Step 1.** A sentence that appeared twice was removed, and Step 4 gained the `IMPORT_API_KEY` fallback.
 
 ## Done when
 
