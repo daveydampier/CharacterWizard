@@ -131,6 +131,25 @@ describe('handleImport', () => {
     expect((await handleImport(post({ id: '42' }, { apikey: 'sb_publishable_test' }), keyed)).status).toBe(200);
   });
 
+  it('still requires the key from a request with no Origin header, which skips the origin list', async () => {
+    const noOrigin = (headers: Record<string, string> = {}) => new Request('https://x.example/functions/v1/import-character', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...headers },
+      body: JSON.stringify({ id: '42' }),
+    });
+    const fetchImpl = upstream(200, {});
+    const keyed = options({ apiKey: 'sb_publishable_test', fetchImpl });
+    expect((await handleImport(noOrigin(), keyed)).status).toBe(401);
+    const wrong = await handleImport(noOrigin({ apikey: 'wrong' }), keyed);
+    expect(wrong.status).toBe(401);
+    expect(await wrong.json()).toEqual({ status: 'unauthorized' });
+    expect(fetchImpl).not.toHaveBeenCalled();
+    const right = await handleImport(noOrigin({ apikey: 'sb_publishable_test' }), keyed);
+    expect(right.status).toBe(200);
+    expect(await right.json()).toEqual({ status: 'ok', raw: {} });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
   it('asks for no key when none is configured', async () => {
     const res = await handleImport(post({ id: '42' }), options({ apiKey: null, fetchImpl: upstream(200) }));
     expect(res.status).toBe(200);

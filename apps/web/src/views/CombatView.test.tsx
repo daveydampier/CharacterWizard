@@ -160,9 +160,20 @@ describe('Combat view', () => {
   });
 
   it('keeps play state when the view is left and opened again', async () => {
-    const record = await openCombat('vlad');
+    const record = await seed('vlad');
+    const { rerender } = render(<CharacterScreen id={record.id} view="combat" />);
+    await screen.findByRole('heading', { name: record.name });
     await userEvent.click(use('Hex'));
-    await useStore.getState().open(record.id);
-    expect(useStore.getState().play.spent).toEqual({ pact: 1 });
+    expect(screen.getByRole('group', { name: 'Pact slots: 1 of 2 left' })).toBeInTheDocument();
+
+    rerender(<CharacterScreen id={record.id} view="explore" />);
+    expect(await screen.findByRole('region', { name: 'Skill checks' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Start my turn' })).toBeNull();
+
+    rerender(<CharacterScreen id={record.id} view="combat" />);
+    expect(await screen.findByRole('button', { name: 'Start my turn' })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Pact slots: 1 of 2 left' })).toBeInTheDocument();
+    expect(pill('Bonus Action')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText('Concentrating on Hex')).toBeInTheDocument();
   });
 });
