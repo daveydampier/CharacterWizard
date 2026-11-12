@@ -30,6 +30,9 @@ function damageText(parts: DamagePart[]): string | null {
   return real.map((p) => `${spacedDice(p.dice)}${p.type ? ` ${p.type.toLowerCase()}` : ''}`).join(' + ');
 }
 
+/** "an Intelligence" before a vowel, "a Strength" otherwise. */
+const article = (label: string): string => (/^[aeiou]/i.test(label) ? 'an' : 'a') + ` ${label}`;
+
 /** The plain-English sentence for a roll. Empty when there is nothing to roll. */
 export function rollLine(roll: Roll): string {
   switch (roll.kind) {
@@ -42,7 +45,7 @@ export function rollLine(roll: Roll): string {
     }
     case 'save': {
       const damage = damageText(roll.damage);
-      return `They roll a ${abilityLabel(roll.ability)} save against DC ${roll.dc}.${damage ? ` Fail: ${damage}.` : ''}`;
+      return `They roll ${article(abilityLabel(roll.ability))} save against DC ${roll.dc}.${damage ? ` Fail: ${damage}.` : ''}`;
     }
     case 'damage': {
       const damage = damageText(roll.damage);

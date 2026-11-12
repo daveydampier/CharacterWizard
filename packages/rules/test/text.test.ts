@@ -52,6 +52,11 @@ describe('rollLine', () => {
       .toBe('They roll a Wisdom save against DC 13.');
   });
 
+  it('uses "an" before an ability that starts with a vowel', () => {
+    expect(rollLine({ kind: 'save', ability: 'int', dc: 13, damage: [] }))
+      .toBe('They roll an Intelligence save against DC 13.');
+  });
+
   it('writes damage with no roll, bare dice, a check and nothing', () => {
     expect(rollLine({ kind: 'damage', damage: [{ dice: '1d6', type: 'necrotic' }] })).toBe('Damage: 1d6 necrotic.');
     expect(rollLine({ kind: 'damage', damage: [] })).toBe('');
