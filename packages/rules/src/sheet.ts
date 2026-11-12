@@ -8,6 +8,7 @@ import { abilityScores, hasModifier, proficiencyBonus } from './core';
 import { armorClass, attacksPerAction, initiative } from './defence';
 import { conditionalNotes, type Note } from './notes';
 import { spellSlots, spellcasting } from './spellcasting';
+import { universalActions } from './universal';
 
 export interface Sheet {
   name: string;
@@ -28,6 +29,8 @@ export interface Sheet {
   pactSlots: { level: number; count: number } | null;
   resources: Resource[];
   abilities: Ability[];
+  /** The actions every character can take. Kept apart from `abilities`, which come from the sheet. */
+  universal: Ability[];
   notes: Note[];
 }
 
@@ -65,6 +68,7 @@ export function buildSheet(c: Character): Sheet {
     pactSlots: pact,
     resources: resources(c),
     abilities: buildAbilities(c),
+    universal: universalActions(),
     notes: conditionalNotes(c),
   };
 }
