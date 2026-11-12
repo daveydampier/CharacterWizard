@@ -39,3 +39,11 @@ if (sheet.resources.length) {
   console.log('\n[resources]');
   for (const r of sheet.resources) console.log(`  ${r.name}: ${r.max} (${r.reset})`);
 }
+
+if (sheet.notes.length) {
+  console.log('\n[notes]');
+  for (const n of sheet.notes) {
+    const about = n.target.kind === 'skill' ? `${n.target.skill}: ` : n.target.kind === 'save' ? `${n.target.ability} save: ` : '';
+    console.log(`  ${about}${n.text}`);
+  }
+}
