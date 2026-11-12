@@ -10,6 +10,8 @@ export interface ImportOptions {
   allowedOrigins: string[];
   /** When set, the request's `apikey` header must equal it. */
   apiKey?: string | null;
+  /** When true, a missing or empty `apiKey` refuses every request instead of skipping the check. The deployed function sets it. */
+  requireKey?: boolean;
   /** Replaced in tests. */
   fetchImpl?: typeof fetch;
   timeoutMs?: number;
@@ -57,7 +59,9 @@ export async function handleImport(req: Request, options: ImportOptions): Promis
   if (origin !== null && Object.keys(cors).length === 0) return reply(403, { status: 'unauthorized' }, {});
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
   if (req.method !== 'POST') return reply(405, { status: 'bad-request' }, cors);
-  if (options.apiKey && req.headers.get('apikey') !== options.apiKey) {
+  if (options.apiKey) {
+    if (req.headers.get('apikey') !== options.apiKey) return reply(401, { status: 'unauthorized' }, cors);
+  } else if (options.requireKey === true) {
     return reply(401, { status: 'unauthorized' }, cors);
   }
 

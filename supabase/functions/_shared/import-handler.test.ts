@@ -135,4 +135,30 @@ describe('handleImport', () => {
     const res = await handleImport(post({ id: '42' }), options({ apiKey: null, fetchImpl: upstream(200) }));
     expect(res.status).toBe(200);
   });
+
+  it.each([
+    ['undefined', undefined],
+    ['null', null],
+    ['empty', ''],
+  ])('refuses every request when a key is required but none is set (%s)', async (_label, apiKey) => {
+    const fetchImpl = upstream(200, {});
+    const res = await handleImport(post({ id: '42' }), options({ apiKey, requireKey: true, fetchImpl }));
+    expect(res.status).toBe(401);
+    expect(await res.json()).toEqual({ status: 'unauthorized' });
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('accepts the matching key when a key is required', async () => {
+    const fetchImpl = upstream(200, {});
+    const keyed = options({ apiKey: 'sb_publishable_test', requireKey: true, fetchImpl });
+    const res = await handleImport(post({ id: '42' }, { apikey: 'sb_publishable_test' }), keyed);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ status: 'ok', raw: {} });
+  });
+
+  it('still answers a preflight from a listed origin when a key is required but missing', async () => {
+    const req = new Request('https://x.example/f', { method: 'OPTIONS', headers: { origin: APP } });
+    const res = await handleImport(req, options({ requireKey: true }));
+    expect(res.status).toBe(204);
+  });
 });
