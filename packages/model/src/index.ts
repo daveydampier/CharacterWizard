@@ -190,6 +190,10 @@ export type Roll =
   | { kind: 'attack'; bonus: number; damage: DamagePart[]; optionalDamage: DamagePart[] }
   | { kind: 'save'; ability: AbilityName; dc: number; damage: DamagePart[] }
   | { kind: 'check'; bonus: number }
+  /** A spell with damage but no attack roll or saving throw. */
+  | { kind: 'damage'; damage: DamagePart[] }
+  /** A feature's dice whose meaning (damage, healing, a bonus) the import does not state. */
+  | { kind: 'dice'; dice: string }
   | { kind: 'none' };
 
 export type Cost =
@@ -200,14 +204,20 @@ export type Cost =
 export interface Ability {
   key: string;
   name: string;
-  source: 'spell' | 'class' | 'subclass' | 'item' | 'feat' | 'species' | 'universal' | 'custom';
+  /** The import cannot tell a subclass feature from a class feature; both are 'class'. */
+  source: 'spell' | 'class' | 'item' | 'feat' | 'species' | 'background' | 'universal' | 'custom';
   timing: Timing;
   roll: Roll;
   cost: Cost;
+  /** A pool shown on the row and spent by hand (a weapon's charges). Use never spends it. */
+  poolKey: string | null;
   tags: Tag[];
   concentration: boolean;
+  ritual: boolean;
   range: string | null;
   area: boolean;
   description: string;
+  /** Short facts from the sheet, shown on the row. */
+  notes: string[];
   tagSource: 'import' | 'curated' | 'user' | 'none';
 }
