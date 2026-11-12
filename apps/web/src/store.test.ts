@@ -63,6 +63,20 @@ describe('saveImported', () => {
     expect(await storage.getPlay(first.id)).toMatchObject({ spent: { pact: 2 }, concentrationKey: null });
     expect(state().play.spent).toEqual({ pact: 2 });
   });
+
+  it('keeps the open character\'s unsaved play state when it is re-imported', async () => {
+    const storage = memoryStorage();
+    const record = await seed('vlad', storage);
+    storage.putPlay = async () => { throw new Error('quota'); };
+    state().use(ability('Hex'), 'combat');
+    await settle();
+    expect(state().persistent).toBe(false);
+    const again = await state().saveImported(loadRaw('vlad'));
+    expect(again?.id).toBe(record.id);
+    expect(state()).toMatchObject({ openId: record.id, undo: null });
+    expect(state().sheet?.name).toBe('Vlad');
+    expect(state().play.spent).toEqual({ pact: 1 });
+  });
 });
 
 describe('open', () => {

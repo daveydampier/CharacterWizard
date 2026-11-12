@@ -117,9 +117,17 @@ export const useStore = create<AppStore>()((set, get) => {
       set({ characters: [...get().characters.filter((c) => c.id !== record.id), record] });
       if (existing) {
         // Re-import: what was spent stays spent, within the new maximums.
-        const saved = await storage.getPlay(record.id).catch(() => null);
-        if (saved) await save(storage.putPlay(record.id, clampState(saved, sheetFor(record))));
-        if (get().openId === record.id) await get().open(record.id);
+        if (get().openId === record.id && !get().persistent) {
+          // A write has failed, so the open character's play state in memory is newer than storage.
+          const sheet = sheetFor(record);
+          const play = clampState(get().play, sheet);
+          set({ sheet, play, undo: null });
+          await save(storage.putPlay(record.id, play));
+        } else {
+          const saved = await storage.getPlay(record.id).catch(() => null);
+          if (saved) await save(storage.putPlay(record.id, clampState(saved, sheetFor(record))));
+          if (get().openId === record.id) await get().open(record.id);
+        }
       }
       return record;
     },
