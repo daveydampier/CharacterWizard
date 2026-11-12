@@ -6,4 +6,5 @@ export * from './spellcasting';
 export * from './resources';
 export * from './tags';
 export * from './abilities';
+export * from './text';
 export * from './sheet';

@@ -1,25 +1,9 @@
 import { readFileSync } from 'node:fs';
 import { convertCharacter } from '@cw/ddb-import';
 import { ABILITIES, SKILLS } from '@cw/model';
-import { buildSheet } from '@cw/rules';
-import type { Ability } from '@cw/model';
+import { buildSheet, rollLine } from '@cw/rules';
 
 const signed = (n: number): string => (n >= 0 ? `+${n}` : String(n));
-
-function rollLine(a: Ability): string {
-  const dmg = (parts: { dice: string; type: string | null }[]): string =>
-    parts.map((p) => `${p.dice}${p.type ? ` ${p.type.toLowerCase()}` : ''}`).join(' + ');
-  switch (a.roll.kind) {
-    case 'attack':
-      return `Roll d20 ${signed(a.roll.bonus)}.${a.roll.damage.length ? ` Hit: ${dmg(a.roll.damage)}.` : ''}`;
-    case 'save':
-      return `They roll a ${a.roll.ability.toUpperCase()} save against ${a.roll.dc}.${a.roll.damage.length ? ` Fail: ${dmg(a.roll.damage)}.` : ''}`;
-    case 'check':
-      return `Roll d20 ${signed(a.roll.bonus)}.`;
-    default:
-      return '';
-  }
-}
 
 const path = process.argv[2];
 if (!path) {
@@ -45,7 +29,10 @@ for (const timing of ['action', 'bonus', 'reaction', 'free', 'long', 'unknown'] 
   const group = sheet.abilities.filter((a) => a.timing === timing);
   if (group.length === 0) continue;
   console.log(`\n[${timing}]`);
-  for (const a of group) console.log(`  ${a.name}${rollLine(a) ? `: ${rollLine(a)}` : ''}`);
+  for (const a of group) {
+    const line = rollLine(a.roll);
+    console.log(`  ${a.name}${line ? `: ${line}` : ''}`);
+  }
 }
 
 if (sheet.resources.length) {
