@@ -23,6 +23,9 @@ Storage and the import function are what sync and sign-in build on.
 
 ## Settle in milestone 3 or 4 (overlays, tags, suggestions)
 
+- The "Paste the character JSON instead" row on the Import screen lost its disclosure triangle when it became a flex row, so it no longer looks expandable. Add a ▾ as the Combat and Explore rows have.
+- The undo bar survives leaving a character and coming back to it, because opening the character that is already open now keeps its state. Undo still restores the right state.
+- A description that is only a non-breaking space shows an empty box.
 - Home shows Re-import for a character pasted from JSON with no D&D Beyond ID (`ddbId` "0"), and prints "Imported " with nothing after it for an invalid date.
 - The character screen shows "Loading…" with no way back if opening a known character fails.
 - The slot choice sheet declares `aria-modal` but has no initial focus, focus trap or Escape key. Adopt `<dialog>` when more dialogs arrive.
