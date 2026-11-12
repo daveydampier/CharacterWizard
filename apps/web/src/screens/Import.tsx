@@ -65,7 +65,7 @@ export function ImportScreen() {
 
   return (
     <main className="mx-auto max-w-md p-4">
-      <a href={routeHref({ name: 'home' })} className="text-sm text-indigo-700">‹ Characters</a>
+      <a href={routeHref({ name: 'home' })} className="inline-flex min-h-11 items-center text-sm text-indigo-700">‹ Characters</a>
       <h1 className="mt-2 text-xl font-semibold">Add a character</h1>
 
       <form onSubmit={(event) => void importByLink(event)} className="mt-4">
@@ -77,7 +77,7 @@ export function ImportScreen() {
           placeholder="https://www.dndbeyond.com/characters/123456789"
           inputMode="url"
           autoComplete="off"
-          className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2"
+          className="mt-1 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 py-2"
         />
         <p className="mt-1 text-xs text-slate-600">The sheet's Character Privacy must be set to Public.</p>
         <button
@@ -101,7 +101,7 @@ export function ImportScreen() {
         onToggle={(event) => setPasteOpen(event.currentTarget.open)}
         className="mt-6 rounded-lg border border-slate-200 bg-white p-3"
       >
-        <summary className="cursor-pointer text-sm font-medium">Paste the character JSON instead</summary>
+        <summary className="flex min-h-11 cursor-pointer items-center text-sm font-medium">Paste the character JSON instead</summary>
         <p className="mt-2 text-xs text-slate-600">
           Use this if the import can't reach D&D Beyond. Paste the JSON, or choose a saved file.
         </p>
@@ -116,7 +116,7 @@ export function ImportScreen() {
         <button
           type="button"
           onClick={() => void importJson(json)}
-          className="mt-2 w-full rounded-lg border border-slate-400 px-4 py-2 text-sm font-medium"
+          className="mt-2 min-h-11 w-full rounded-lg border border-slate-400 px-4 py-2 text-sm font-medium"
         >
           Use this JSON
         </button>

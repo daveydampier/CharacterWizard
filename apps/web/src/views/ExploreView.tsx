@@ -69,7 +69,7 @@ function CheckList({ title, rows, searching, more }: { title: string; rows: Chec
       {first.map((row) => <Check key={row.key} row={row} />)}
       {rest.length > 0 ? (
         <details className="border-t border-slate-200">
-          <summary className="flex cursor-pointer items-center justify-between py-2 text-sm text-slate-700">
+          <summary className="flex min-h-11 cursor-pointer items-center justify-between py-2 text-sm text-slate-700">
             <span>{`${rest.length} more ${more}`}</span>
             <span aria-hidden="true">▾</span>
           </summary>
@@ -126,7 +126,7 @@ export function ExploreView({ sheet }: { sheet: Sheet }) {
         value={query}
         onChange={(event) => setQuery(event.target.value)}
         placeholder="Search skills and abilities"
-        className="mb-3 w-full rounded-lg border border-slate-300 bg-white px-3 py-2"
+        className="mb-3 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 py-2"
       />
 
       <ResourceChips pools={allPools} state={play} onAdjust={(pool, delta) => adjust(pool.key, delta)} />

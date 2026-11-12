@@ -27,7 +27,7 @@ export function ResourceChips({ pools, state, onAdjust }: Props) {
         </span>
       ))}
       {pools.length > SHOWN ? (
-        <button type="button" onClick={() => setShowAll(!showAll)} className="rounded-full px-2 py-1 text-sm text-indigo-700">
+        <button type="button" onClick={() => setShowAll(!showAll)} className="inline-flex min-h-11 items-center rounded-full px-2 py-1 text-sm text-indigo-700">
           {showAll ? 'Show fewer' : `+${hidden} more`}
         </button>
       ) : null}

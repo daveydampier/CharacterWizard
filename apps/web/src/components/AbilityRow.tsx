@@ -41,7 +41,7 @@ export function AbilityRow({ ability, sheet, state, mode, onUse, onAdjust }: Pro
           type="button"
           aria-expanded={open}
           onClick={() => setOpen(!open)}
-          className={`min-w-0 flex-1 text-left ${blocked ? 'text-slate-500' : ''}`}
+          className={`min-h-11 min-w-0 flex-1 text-left ${blocked ? 'text-slate-500' : ''}`}
         >
           <span className="font-medium">{ability.name}</span>
           {meta.length > 0 ? <span className="ml-2 text-xs text-slate-500">{meta.join(' · ')}</span> : null}
@@ -56,7 +56,7 @@ export function AbilityRow({ ability, sheet, state, mode, onUse, onAdjust }: Pro
             aria-label={`Use ${ability.name}`}
             disabled={!a.canUse}
             onClick={() => onUse(ability)}
-            className="rounded-lg border border-slate-400 px-3 py-1.5 text-sm font-medium disabled:border-slate-200 disabled:text-slate-400"
+            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-slate-400 px-3 py-1.5 text-sm font-medium disabled:border-slate-200 disabled:text-slate-400"
           >
             Use
           </button>

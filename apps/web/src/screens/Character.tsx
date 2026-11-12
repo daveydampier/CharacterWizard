@@ -4,7 +4,7 @@ import { useStore } from '../store';
 import { CombatView } from '../views/CombatView';
 import { ExploreView } from '../views/ExploreView';
 
-const TAB = 'rounded-full px-3 py-1 text-sm';
+const TAB = 'inline-flex min-h-11 items-center rounded-full px-3 py-1 text-sm';
 const TAB_ON = `${TAB} bg-slate-900 text-white`;
 const TAB_OFF = `${TAB} bg-slate-200 text-slate-800`;
 
@@ -26,17 +26,17 @@ export function CharacterScreen({ id, view }: { id: string; view: View }) {
     return (
       <main className="mx-auto max-w-md p-4">
         <p className="font-medium">That character isn't on this device.</p>
-        <a href={routeHref({ name: 'home' })} className="mt-2 inline-block text-indigo-700">Back to your characters</a>
+        <a href={routeHref({ name: 'home' })} className="mt-2 inline-flex min-h-11 items-center text-indigo-700">Back to your characters</a>
       </main>
     );
   }
   if (openId !== id || !sheet) return <main className="mx-auto max-w-md p-4 text-slate-600">Loading…</main>;
 
   return (
-    <main className="mx-auto max-w-md px-4 pb-32 pt-3">
+    <main className="mx-auto max-w-md px-4 pb-[calc(10rem+env(safe-area-inset-bottom))] pt-3">
       <header className="flex items-center justify-between gap-2">
         <div className="min-w-0">
-          <a href={routeHref({ name: 'home' })} className="text-sm text-indigo-700">‹ Characters</a>
+          <a href={routeHref({ name: 'home' })} className="inline-flex min-h-11 items-center text-sm text-indigo-700">‹ Characters</a>
           <h1 className="truncate text-lg font-semibold">{sheet.name}</h1>
           {sheet.classLine ? <p className="text-xs text-slate-600">{sheet.classLine}</p> : null}
         </div>
@@ -67,11 +67,11 @@ export function CharacterScreen({ id, view }: { id: string; view: View }) {
       <div className="mt-3">{view === 'combat' ? <CombatView sheet={sheet} /> : <ExploreView sheet={sheet} />}</div>
 
       {undo || view === 'combat' ? (
-        <footer className="fixed inset-x-0 bottom-0 z-10 mx-auto max-w-md space-y-2 bg-slate-50 px-4 pb-4 pt-2">
+        <footer className="fixed inset-x-0 bottom-0 z-10 mx-auto max-w-md space-y-2 bg-slate-50 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2">
           {undo ? (
-            <p role="status" className="flex items-center justify-between gap-3 rounded-lg bg-slate-800 px-3 py-2 text-sm text-white">
-              <span>{undo.message}</span>
-              <button type="button" onClick={undoLast} className="font-medium underline">Undo</button>
+            <p role="status" className="flex items-center justify-between gap-3 rounded-lg bg-slate-800 px-3 py-0.5 text-sm text-white">
+              <span className="py-1.5">{undo.message}</span>
+              <button type="button" onClick={undoLast} className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center font-medium underline">Undo</button>
             </p>
           ) : null}
           {view === 'combat' ? (

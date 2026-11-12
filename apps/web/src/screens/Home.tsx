@@ -41,11 +41,11 @@ function CharacterCard({ character }: { character: StoredCharacter }) {
           {[sheet.classLine, `Imported ${importedOn(character.importedAt)}`].filter((part) => part.trim() !== '').join(' · ')}
         </span>
       </a>
-      <div className="mt-2 flex gap-2 text-sm">
-        <button type="button" onClick={() => void reimport()} disabled={busy} className="rounded-lg border border-slate-300 px-3 py-1.5">
+      <div className="mt-2 flex gap-3 text-sm">
+        <button type="button" onClick={() => void reimport()} disabled={busy} className="inline-flex min-h-11 items-center rounded-lg border border-slate-300 px-3 py-1.5">
           {busy ? 'Updating…' : 'Re-import'}
         </button>
-        <button type="button" onClick={confirmRemove} className="rounded-lg border border-slate-300 px-3 py-1.5 text-red-800">
+        <button type="button" onClick={confirmRemove} className="inline-flex min-h-11 items-center rounded-lg border border-slate-300 px-3 py-1.5 text-red-800">
           Delete
         </button>
       </div>
@@ -77,7 +77,7 @@ export function HomeScreen() {
         Add a character
       </a>
       <p className="mt-6 text-center text-sm">
-        <a href={routeHref({ name: 'about' })} className="text-indigo-700">About and credits</a>
+        <a href={routeHref({ name: 'about' })} className="inline-flex min-h-11 items-center text-indigo-700">About and credits</a>
       </p>
     </main>
   );

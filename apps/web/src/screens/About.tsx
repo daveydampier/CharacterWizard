@@ -3,7 +3,7 @@ import { routeHref } from '../router';
 export function AboutScreen() {
   return (
     <main className="mx-auto max-w-md p-4">
-      <a href={routeHref({ name: 'home' })} className="text-sm text-indigo-700">‹ Characters</a>
+      <a href={routeHref({ name: 'home' })} className="inline-flex min-h-11 items-center text-sm text-indigo-700">‹ Characters</a>
       <h1 className="mt-2 text-xl font-semibold">About Character Wizard</h1>
       <p className="mt-3 text-sm">
         A play aid for D&D (2024 rules). It shows what your character can do, grouped by Action, Bonus Action

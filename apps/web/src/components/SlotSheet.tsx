@@ -31,7 +31,7 @@ export function SlotSheet({ ability, options, onPick, onCancel }: Props) {
             </li>
           ))}
         </ul>
-        <button type="button" onClick={onCancel} className="mt-2 w-full rounded-lg border border-slate-300 py-2">Cancel</button>
+        <button type="button" onClick={onCancel} className="mt-2 min-h-11 w-full rounded-lg border border-slate-300 py-2">Cancel</button>
       </div>
     </div>
   );

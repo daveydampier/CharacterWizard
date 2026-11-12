@@ -9,7 +9,7 @@ import { useStore } from '../store';
 
 const TIMINGS: TurnTiming[] = ['action', 'bonus', 'reaction'];
 
-const SUMMARY = 'flex cursor-pointer items-center justify-between py-2 text-sm font-medium text-slate-700';
+const SUMMARY = 'flex min-h-11 cursor-pointer items-center justify-between py-2 text-sm font-medium text-slate-700';
 
 /** A group that is always open: Action, Bonus Action, Reaction, Other. */
 function Group({ title, hint, spent, children }: { title: string; hint?: string; spent?: boolean; children: ReactNode }) {
@@ -74,7 +74,7 @@ export function CombatView({ sheet }: { sheet: Sheet }) {
               aria-pressed={spent}
               aria-label={`${TIMING_LABEL[timing]}: ${spent ? 'spent' : 'available'}`}
               onClick={() => togglePill(timing)}
-              className={`flex-1 rounded-full border px-2 py-1.5 text-sm ${
+              className={`min-h-11 flex-1 rounded-full border px-2 py-1.5 text-sm ${
                 spent ? 'border-slate-300 text-slate-500 line-through' : 'border-indigo-300 bg-indigo-50 text-indigo-900'
               }`}
             >
