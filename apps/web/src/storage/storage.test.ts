@@ -1,4 +1,6 @@
 import { IDBFactory } from 'fake-indexeddb';
+import { openDB } from 'idb';
+import { DB_NAME } from './idb';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PlayState } from '@cw/model';
 import { idbStorage, memoryStorage, openStorage, type AppStorage, type StoredCharacter } from './index';
@@ -70,6 +72,13 @@ describe('idbStorage', () => {
     const second = await idbStorage();
     expect(await second.listCharacters()).toEqual([character('a')]);
     expect(await second.getPlay('a')).toEqual(play);
+  });
+
+  it('closes its connection when a newer version is opened elsewhere, so that open is not blocked', async () => {
+    await idbStorage();
+    const newer = await openDB(DB_NAME, 2);
+    expect(newer.version).toBe(2);
+    newer.close();
   });
 });
 

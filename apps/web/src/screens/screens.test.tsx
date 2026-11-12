@@ -1,7 +1,8 @@
-import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { loadRaw } from '../../../../test-utils/fixtures';
+import { ErrorBoundary } from '../App';
 import { memoryStorage, type AppStorage } from '../storage';
 import { useStore } from '../store';
 import { seed } from '../test/helpers';
@@ -249,6 +250,29 @@ describe('App', () => {
     await userEvent.click(within(nav).getByRole('link', { name: 'Explore' }));
     expect(await screen.findByRole('region', { name: 'Skill checks' })).toBeInTheDocument();
     expect(window.location.hash).toBe(`#/c/${record.id}/explore`);
+  });
+
+  it('catches a crashing screen, logs it, offers a way out and recovers on the next route', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    let crash = true;
+    function Boom() {
+      if (crash) throw new Error('boom');
+      return <p>Recovered</p>;
+    }
+    render(<ErrorBoundary><Boom /></ErrorBoundary>);
+    const fallback = screen.getByRole('alert');
+    expect(fallback).toHaveTextContent('Something went wrong on this screen.');
+    expect(within(fallback).getByRole('button', { name: 'Reload' })).toBeInTheDocument();
+    expect(within(fallback).getByRole('link', { name: 'Back to your characters' })).toHaveAttribute('href', '#/');
+    expect(consoleError.mock.calls.some((args) => args.some((arg) => arg instanceof Error && arg.message === 'boom'))).toBe(true);
+
+    crash = false;
+    act(() => {
+      window.location.hash = '#/about';
+      window.dispatchEvent(new HashChangeEvent('hashchange'));
+    });
+    expect(screen.getByText('Recovered')).toBeInTheDocument();
+    consoleError.mockRestore();
   });
 
   it('loads stored characters by itself on a fresh start', async () => {

@@ -1,5 +1,5 @@
-import { Component, useEffect, type ReactNode } from 'react';
-import { useRoute } from './router';
+import { Component, useEffect, type ErrorInfo, type ReactNode } from 'react';
+import { routeHref, useRoute } from './router';
 import { AboutScreen } from './screens/About';
 import { CharacterScreen } from './screens/Character';
 import { HomeScreen } from './screens/Home';
@@ -7,11 +7,28 @@ import { ImportScreen } from './screens/Import';
 import { useStore } from './store';
 
 /** Catches a crash in any screen. Stored characters and play state are not touched. */
-class ErrorBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+export class ErrorBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
   state = { failed: false };
 
   static getDerivedStateFromError(): { failed: boolean } {
     return { failed: true };
+  }
+
+  /** Going to another screen tries again. */
+  private readonly reset = (): void => {
+    if (this.state.failed) this.setState({ failed: false });
+  };
+
+  componentDidMount(): void {
+    window.addEventListener('hashchange', this.reset);
+  }
+
+  componentWillUnmount(): void {
+    window.removeEventListener('hashchange', this.reset);
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo): void {
+    console.error(error, info.componentStack);
   }
 
   render(): ReactNode {
@@ -20,13 +37,18 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { failed: boolean
       <main role="alert" className="mx-auto max-w-md p-4">
         <p className="font-medium">Something went wrong on this screen.</p>
         <p className="mt-1 text-sm text-slate-600">Your saved characters are safe.</p>
-        <button
-          type="button"
-          onClick={() => window.location.reload()}
-          className="mt-3 rounded-lg bg-slate-900 px-4 py-2 font-medium text-white"
-        >
-          Reload
-        </button>
+        <div className="mt-3 flex items-center gap-4">
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="min-h-11 rounded-lg bg-slate-900 px-4 py-2 font-medium text-white"
+          >
+            Reload
+          </button>
+          <a href={routeHref({ name: 'home' })} className="inline-flex min-h-11 items-center text-indigo-700">
+            Back to your characters
+          </a>
+        </div>
       </main>
     );
   }

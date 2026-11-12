@@ -67,6 +67,13 @@ describe('Description', () => {
       + '<ul><li style="background:url(x)">one</li></ul>';
     const clean = sanitiseDescription(dirty);
     expect(clean).toBe('<p>Deal <strong>fire</strong> damage.</p>link text<ul><li>one</li></ul>');
+    expect(sanitiseDescription('<p data-x="1" aria-hidden="true">hi</p>')).toBe('<p>hi</p>');
+  });
+
+  it.each(['<script>alert(1)</script>', '<p></p>'])('says so when nothing is left after sanitising %s', (html) => {
+    const { container } = render(<Description html={html} />);
+    expect(screen.getByText('No description on the sheet.')).toBeInTheDocument();
+    expect(container.querySelector('.description')).toBeNull();
   });
 
   it('renders the sanitised text', () => {

@@ -16,6 +16,10 @@ export async function idbStorage(): Promise<AppStorage> {
       database.createObjectStore('characters', { keyPath: 'id' });
       database.createObjectStore('play', { keyPath: 'characterId' });
     },
+    // A newer version of the app is opening the database in another tab: let it upgrade.
+    blocking() {
+      db.close();
+    },
   });
   return {
     async listCharacters() {
