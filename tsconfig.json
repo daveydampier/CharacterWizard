@@ -6,7 +6,15 @@
     "strict": true,
     "skipLibCheck": true,
     "noEmit": true,
+    "allowImportingTsExtensions": true,
     "types": ["node"]
   },
-  "include": ["packages/*/src", "packages/*/test", "scripts", "test-utils", "vitest.config.ts"]
+  "include": [
+    "packages/*/src",
+    "packages/*/test",
+    "scripts",
+    "test-utils",
+    "supabase/functions/_shared",
+    "vitest.config.ts"
+  ]
 }
