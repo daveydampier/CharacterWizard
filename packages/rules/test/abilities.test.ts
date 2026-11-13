@@ -24,6 +24,7 @@ describe('buildAbilities: vlad', () => {
   it('builds a weapon attack', () => {
     expect(named('Wurms Claw - Sword')[0]).toMatchObject({
       source: 'item', timing: 'action', tags: ['damage'], cost: { kind: 'none' },
+      poolKey: 'item:10956860:base', notes: [], ritual: false,
       roll: {
         kind: 'attack', bonus: 5,
         damage: [{ dice: '1d8+3', type: 'Piercing' }],
@@ -41,7 +42,8 @@ describe('buildAbilities: vlad', () => {
 
   it('builds a pact slot spell with concentration', () => {
     expect(named('Hex')[0]).toMatchObject({
-      timing: 'bonus', concentration: true, cost: { kind: 'slot', minLevel: 1, pact: true }, roll: { kind: 'none' },
+      timing: 'bonus', concentration: true, cost: { kind: 'slot', minLevel: 1, pact: true },
+      roll: { kind: 'damage', damage: [{ dice: '1d6', type: 'necrotic' }] },
     });
   });
 
@@ -96,6 +98,75 @@ describe('buildAbilities: other characters', () => {
   });
 });
 
+describe('rolls with no attack and no save', () => {
+  const abilitiesOf = (slug: (typeof SLUGS)[number]) => buildAbilities(convertCharacter(loadRaw(slug)));
+
+  it('shows the damage of a spell that needs no attack roll or saving throw', () => {
+    expect(abilitiesOf('danger').find((a) => a.name === 'Absorb Elements')?.roll).toEqual({
+      kind: 'damage', damage: [{ dice: '1d6', type: 'acid' }],
+    });
+  });
+
+  it('shows a feature\'s dice without calling them damage', () => {
+    const danger = abilitiesOf('danger');
+    expect(danger.find((a) => a.name === 'Second Wind')?.roll).toEqual({ kind: 'dice', dice: '1d10+9' });
+    expect(danger.find((a) => a.name === 'Tactical Mind')?.roll).toEqual({ kind: 'dice', dice: '1d10' });
+    expect(abilitiesOf('milton').find((a) => a.name === 'Bardic Inspiration')?.roll).toEqual({ kind: 'dice', dice: '1d6' });
+    expect(abilitiesOf('sid').find((a) => a.name === 'Sneak Attack')?.roll).toEqual({ kind: 'dice', dice: '2d6' });
+  });
+
+  it('keeps a spell with no damage and no roll as none', () => {
+    expect(abilitiesOf('vlad').find((a) => a.name === 'Mage Armor')?.roll).toEqual({ kind: 'none' });
+  });
+});
+
+describe('sources, rituals, notes and weapon pools', () => {
+  const abilitiesOf = (raw: unknown) => buildAbilities(convertCharacter(raw));
+
+  it.each(SLUGS)('never uses a source outside the model: %s', (slug) => {
+    const allowed = ['spell', 'class', 'item', 'feat', 'species', 'background', 'universal', 'custom'];
+    for (const a of abilitiesOf(loadRaw(slug))) expect(allowed).toContain(a.source);
+  });
+
+  it('maps a background action to the background source', () => {
+    const raw = { data: { actions: { background: [{ id: 5, name: 'Background Trick', activation: { activationType: 1 } }] } } };
+    expect(abilitiesOf(raw).find((a) => a.name === 'Background Trick')?.source).toBe('background');
+  });
+
+  it('marks ritual spells', () => {
+    const minkis = abilitiesOf(loadRaw('minkis'));
+    expect(minkis.find((a) => a.name === 'Detect Magic')?.ritual).toBe(true);
+    expect(minkis.filter((a) => a.ritual).map((a) => a.name).sort()).toEqual(['Detect Magic', 'Find Familiar', 'Identify']);
+  });
+
+  it('links a weapon to its own charge pool and to nothing else', () => {
+    const vlad = abilitiesOf(loadRaw('vlad'));
+    const claws = vlad.filter((a) => a.name.startsWith('Wurms Claw'));
+    expect(claws).toHaveLength(3);
+    for (const claw of claws) {
+      expect(claw.poolKey).toBe(claw.key);
+      expect(claw.cost).toEqual({ kind: 'none' });
+    }
+    expect(vlad.filter((a) => a.poolKey !== null)).toHaveLength(3);
+    expect(abilitiesOf(loadRaw('franny')).every((a) => a.poolKey === null)).toBe(true);
+  });
+
+  it('says which item grants a spell', () => {
+    expect(abilitiesOf(loadRaw('maya')).find((a) => a.name === 'Scorching Ray')?.notes).toEqual(['From Shepherds Staff']);
+    expect(abilitiesOf(loadRaw('vlad')).find((a) => a.name === 'Hex')?.notes).toEqual([]);
+  });
+
+  it('explains an unattuned weapon and shows no pool for it', () => {
+    const raw = loadRaw('vlad');
+    const item = raw.data.inventory.find((i: any) => i.equipped === true && i.definition.filterType === 'Weapon');
+    item.definition.canAttune = true;
+    item.isAttuned = false;
+    const weapon = abilitiesOf(raw).find((a) => a.name === item.definition.name);
+    expect(weapon).toMatchObject({ poolKey: null, notes: ['Not attuned: magic properties are off'] });
+    expect(resources(convertCharacter(raw)).map((r) => r.name)).not.toContain(item.definition.name);
+  });
+});
+
 describe('item charges and item-granted spells', () => {
   const sheetOf = (slug: (typeof SLUGS)[number]) => buildSheet(convertCharacter(loadRaw(slug)));
 
@@ -126,6 +197,16 @@ describe('item charges and item-granted spells', () => {
     const c = convertCharacter(loadRaw('maya'));
     c.chargedItems = [];
     expect(buildAbilities(c).find((a) => a.name === 'Scorching Ray')?.cost).toEqual({ kind: 'none' });
+  });
+
+  it('costs a slot when an item spell is flagged as slot-using and its item has no pool', () => {
+    const c = convertCharacter(loadRaw('maya'));
+    const ray = c.spells.find((s) => s.name === 'Scorching Ray');
+    if (!ray) throw new Error('fixture has no Scorching Ray');
+    ray.usesSlot = true;
+    expect(buildAbilities(c).find((a) => a.name === 'Scorching Ray')?.cost).toMatchObject({ kind: 'uses' });
+    c.chargedItems = [];
+    expect(buildAbilities(c).find((a) => a.name === 'Scorching Ray')?.cost).toEqual({ kind: 'slot', minLevel: 2, pact: false });
   });
 
   it.each(SLUGS)('has no empty resource and no duplicate resource key: %s', (slug) => {

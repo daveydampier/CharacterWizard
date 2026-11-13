@@ -1,0 +1,139 @@
+import { parseCharacterId } from '@cw/ddb-import';
+import { useState, type FormEvent } from 'react';
+import { IMPORT_MESSAGES, PRIVACY_HINT, fetchCharacter } from '../import/client';
+import { navigate, routeHref } from '../router';
+import { useStore } from '../store';
+
+const NOT_A_CHARACTER = "That doesn't look like a D&D Beyond character.";
+const SAVE_FAILED = "Couldn't add this character. Try again.";
+const READ_FAILED = "Couldn't read that file.";
+const PASTE_HINT = 'You can paste the character JSON below instead.';
+
+export function ImportScreen() {
+  const saveImported = useStore((s) => s.saveImported);
+  const [link, setLink] = useState('');
+  const [json, setJson] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [hint, setHint] = useState<string | null>(null);
+  const [pasteOpen, setPasteOpen] = useState(false);
+
+  const fail = (message: string, extra: string | null = null): void => {
+    setError(message);
+    setHint(extra);
+  };
+
+  /** Stores the raw JSON and opens the character, or says why it could not. */
+  async function store(raw: unknown): Promise<void> {
+    let record;
+    try {
+      record = await saveImported(raw);
+    } catch {
+      return fail(SAVE_FAILED);
+    }
+    if (!record) return fail(NOT_A_CHARACTER);
+    navigate({ name: 'character', id: record.id, view: 'combat' });
+  }
+
+  async function importByLink(event: FormEvent): Promise<void> {
+    event.preventDefault();
+    const id = parseCharacterId(link);
+    if (id === null) return fail('Paste a D&D Beyond character link or its number.');
+    setBusy(true);
+    setError(null);
+    setHint(null);
+    const result = await fetchCharacter(id);
+    setBusy(false);
+    if (result.status === 'ok') return store(result.raw);
+    if (result.status === 'unreachable' || result.status === 'upstream-error') {
+      // The service can't get the sheet: point to the fallback and open it.
+      setPasteOpen(true);
+      return fail(IMPORT_MESSAGES[result.status], PASTE_HINT);
+    }
+    fail(IMPORT_MESSAGES[result.status], result.status === 'private' ? PRIVACY_HINT : null);
+  }
+
+  async function importJson(text: string): Promise<void> {
+    let raw: unknown;
+    try {
+      raw = JSON.parse(text);
+    } catch {
+      return fail("That isn't valid JSON.");
+    }
+    await store(raw);
+  }
+
+  return (
+    <main className="mx-auto max-w-md p-4">
+      <a href={routeHref({ name: 'home' })} className="inline-flex min-h-11 items-center text-sm text-indigo-700">‹ Characters</a>
+      <h1 className="mt-2 text-xl font-semibold">Add a character</h1>
+
+      <form onSubmit={(event) => void importByLink(event)} className="mt-4">
+        <label htmlFor="link" className="block text-sm font-medium">D&D Beyond character link or number</label>
+        <input
+          id="link"
+          value={link}
+          onChange={(event) => setLink(event.target.value)}
+          placeholder="https://www.dndbeyond.com/characters/123456789"
+          inputMode="url"
+          autoComplete="off"
+          className="mt-1 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 py-2"
+        />
+        <p className="mt-1 text-xs text-slate-600">The sheet's Character Privacy must be set to Public.</p>
+        <button
+          type="submit"
+          disabled={busy}
+          className="mt-3 w-full rounded-lg bg-slate-900 px-4 py-3 font-medium text-white disabled:opacity-60"
+        >
+          {busy ? 'Importing…' : 'Import'}
+        </button>
+      </form>
+
+      {error ? (
+        <div role="alert" className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-900">
+          <p>{error}</p>
+          {hint ? <p className="mt-1">{hint}</p> : null}
+        </div>
+      ) : null}
+
+      <details
+        open={pasteOpen}
+        onToggle={(event) => setPasteOpen(event.currentTarget.open)}
+        className="mt-6 rounded-lg border border-slate-200 bg-white p-3"
+      >
+        <summary className="flex min-h-11 cursor-pointer items-center text-sm font-medium">Paste the character JSON instead</summary>
+        <p className="mt-2 text-xs text-slate-600">
+          Use this if the import can't reach D&D Beyond. Paste the JSON, or choose a saved file.
+        </p>
+        <label htmlFor="json" className="mt-2 block text-sm font-medium">Character JSON</label>
+        <textarea
+          id="json"
+          value={json}
+          onChange={(event) => setJson(event.target.value)}
+          rows={5}
+          className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-mono text-xs"
+        />
+        <button
+          type="button"
+          onClick={() => void importJson(json)}
+          className="mt-2 min-h-11 w-full rounded-lg border border-slate-400 px-4 py-2 text-sm font-medium"
+        >
+          Use this JSON
+        </button>
+        <label htmlFor="file" className="mt-3 block text-sm font-medium">Or choose a JSON file</label>
+        <input
+          id="file"
+          type="file"
+          accept="application/json,.json"
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            // Cleared so that choosing the same file again is a change too.
+            event.target.value = '';
+            if (file) void file.text().then(importJson, () => fail(READ_FAILED));
+          }}
+          className="mt-1 block w-full text-sm"
+        />
+      </details>
+    </main>
+  );
+}

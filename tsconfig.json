@@ -1,12 +1,25 @@
 {
   "compilerOptions": {
     "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
     "strict": true,
     "skipLibCheck": true,
     "noEmit": true,
+    "allowImportingTsExtensions": true,
     "types": ["node"]
   },
-  "include": ["packages/*/src", "packages/*/test", "scripts", "test-utils", "vitest.config.ts"]
+  "include": [
+    "packages/*/src",
+    "packages/*/test",
+    "apps/web/src",
+    "apps/web/dev",
+    "apps/web/vite.config.ts",
+    "scripts",
+    "test-utils",
+    "supabase/functions/_shared",
+    "vitest.config.ts"
+  ]
 }

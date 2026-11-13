@@ -113,4 +113,14 @@ describe('weapon attunement', () => {
     const plain = withWeapon(plusOne, false, false);
     expect(weaponOf(plain.raw, plain.name)?.magicBonus).toBe(1);
   });
+
+  it('flags an unattuned attunable weapon and gives it no charge pool', () => {
+    const off = withWeapon(extra, true, false);
+    expect(weaponOf(off.raw, off.name)).toMatchObject({ unattuned: true, uses: null });
+    expect(convertCharacter(off.raw).chargedItems.map((i) => i.name)).not.toContain(off.name);
+    const on = withWeapon(extra, true, true);
+    expect(weaponOf(on.raw, on.name)).toMatchObject({ unattuned: false, uses: { base: 3 } });
+    const plain = withWeapon(extra, false, false);
+    expect(weaponOf(plain.raw, plain.name)).toMatchObject({ unattuned: false, uses: { base: 3 } });
+  });
 });

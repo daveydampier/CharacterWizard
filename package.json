@@ -5,6 +5,8 @@
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
+    "dev": "pnpm --filter @cw/web dev",
+    "build": "pnpm --filter @cw/web build",
     "sheet": "tsx scripts/sheet.ts",
     "fetch-character": "tsx scripts/fetch-character.ts"
   },
@@ -13,6 +15,8 @@
     "@cw/model": "workspace:*",
     "@cw/rules": "workspace:*",
     "@types/node": "^26.6.6",
+    "@vitejs/plugin-react": "^6.3.0",
+    "jsdom": "^31.0.0",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vitest": "^5.1.0"

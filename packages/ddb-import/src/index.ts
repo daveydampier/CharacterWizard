@@ -8,6 +8,8 @@ import { baseScores, scoreOverrides } from './scores';
 import { convertSkillCustom } from './skills';
 import { convertSpells } from './spells';
 
+export { parseCharacterId } from './id';
+
 /** Accepts the API envelope ({ data }) or the inner character object. Never throws. */
 export function convertCharacter(input: unknown): Character {
   const outer = obj(input);

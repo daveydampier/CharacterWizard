@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const SLUGS = [
@@ -24,12 +25,13 @@ export interface Expected {
   limitedUses: Record<string, number>;
 }
 
-const root = fileURLToPath(new URL('../fixtures/', import.meta.url));
+// Built from a path, not a URL object: under jsdom the global URL is not Node's.
+const root = join(dirname(fileURLToPath(import.meta.url)), '..', 'fixtures');
 
 export function loadRaw(slug: Slug): any {
-  return JSON.parse(readFileSync(`${root}characters/${slug}.json`, 'utf8'));
+  return JSON.parse(readFileSync(join(root, 'characters', `${slug}.json`), 'utf8'));
 }
 
 export function loadExpected(slug: Slug): Expected {
-  return JSON.parse(readFileSync(`${root}expected/${slug}.json`, 'utf8'));
+  return JSON.parse(readFileSync(join(root, 'expected', `${slug}.json`), 'utf8'));
 }

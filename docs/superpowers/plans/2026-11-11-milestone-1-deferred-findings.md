@@ -6,12 +6,14 @@ See also "Known gaps carried forward" in `2026-11-11-milestone-1-import-and-shee
 
 ## Settle in milestone 2 (views and tracking)
 
-- Weapon abilities cost nothing, although a weapon's charge pool is listed as a resource under the same key. Decide how spending a charge links to the weapon.
-- `Roll` has no damage-only variant, so spells with damage but no attack or save (Hex, Absorb Elements) show no damage.
-- Unarmed strike damage is a plain number string (`'0'`, `'4'`), not a dice expression. The roll line needs to handle it.
-- An item-granted spell that D&D Beyond flags as using a spell slot gets a `:slot` key suffix while its cost is the item's charges or nothing. If its item has no pool, it shows no cost.
-- An equipped but unattuned attunable weapon no longer shows its charge pool.
-- `Ability.source` never takes the value `subclass`; background actions map to `feat`.
+All six were settled in the milestone 2 design on 2026-11-11. The decisions are recorded in the spec (section 5.1 unless stated) and implemented by `2026-11-11-milestone-2-views-and-tracking.md`.
+
+- Weapon abilities cost nothing, although a weapon's charge pool is listed as a resource under the same key. **Settled:** the weapon carries the pool in `Ability.poolKey`; the row shows it as pips spent by hand, and Use never touches it.
+- `Roll` has no damage-only variant, so spells with damage but no attack or save (Hex, Absorb Elements) show no damage. **Settled:** `Roll` gains `damage`, and `dice` for feature dice whose meaning the import does not state.
+- Unarmed strike damage is a plain number string (`'0'`, `'4'`), not a dice expression. **Settled:** it stays a string; the roll line prints a flat number as is and zero as "no damage" (spec section 10.1).
+- An item-granted spell that D&D Beyond flags as using a spell slot gets a `:slot` key suffix while its cost is the item's charges or nothing. **Settled:** every item-granted spell's key ends `:item`; the cost is the item's charge, else a slot if flagged, else nothing.
+- An equipped but unattuned attunable weapon no longer shows its charge pool. **Settled:** kept, because an unattuned item's magic is off; the row now says so.
+- `Ability.source` never takes the value `subclass`; background actions map to `feat`. **Settled:** `subclass` is removed and `background` is added.
 
 ## Settle in milestone 3 (accounts and overlays, where keys become persistent)
 
@@ -40,7 +42,7 @@ See also "Known gaps carried forward" in `2026-11-11-milestone-1-import-and-shee
 - A class slot table shorter than the class level is indistinguishable from "no slots".
 - `fetch-character` and `sheet` print a raw stack trace on a network failure, a non-JSON response or a bad file path.
 - The sanitizer redacts only string values; a nested object under a redacted key is recursed into.
-- `parseCharacterId` rejects URLs with a query string or fragment.
+- `parseCharacterId` rejects URLs with a query string or fragment. (Fixed in milestone 2, where it moves into `@cw/ddb-import`.)
 - `loadRaw` returns `any`.
 
 ## Design note

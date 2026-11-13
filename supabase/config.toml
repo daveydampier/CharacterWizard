@@ -1,0 +1,4 @@
+project_id = "character-wizard"
+
+[functions.import-character]
+verify_jwt = true

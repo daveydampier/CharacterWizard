@@ -1,16 +1,9 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
+import { parseCharacterId } from '@cw/ddb-import';
 import { sanitize } from './sanitize';
 
 const ENDPOINT = 'https://character-service.dndbeyond.com/character/v5/character/';
-
-/** Accepts "123456789" or a dndbeyond.com/characters/<id> URL. Returns the numeric ID or null. */
-export function parseCharacterId(input: string): string | null {
-  const trimmed = input.trim();
-  if (/^\d{1,12}$/.test(trimmed)) return trimmed;
-  const match = /^https:\/\/(?:www\.)?dndbeyond\.com\/characters\/(\d{1,12})(?:\/[a-z-]*)?$/.exec(trimmed);
-  return match ? match[1] : null;
-}
 
 async function main(): Promise<void> {
   const [input, slug] = process.argv.slice(2);

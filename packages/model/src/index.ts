@@ -79,6 +79,7 @@ export interface CharacterClass {
 }
 
 export interface DamagePart {
+  /** A dice expression ("1d8+3") or a flat number ("4", "0"). */
   dice: string;
   type: string | null;
 }
@@ -98,7 +99,10 @@ export interface Weapon {
   isPactWeapon: boolean;
   extraDamage: DamagePart[];
   properties: string[];
+  /** Null when the weapon has no charge pool, or needs attunement and is not attuned. */
   uses: LimitedUse | null;
+  /** True when the item needs attunement and is not attuned: its magic properties are off. */
+  unattuned: boolean;
 }
 
 export interface Armor {
@@ -126,6 +130,8 @@ export interface SpellEntry {
   uses: LimitedUse | null;
   /** Key of the item that grants this spell (`item:<definitionId>:base`); null if not item-granted. */
   itemKey: string | null;
+  /** Name of the item that grants this spell; null if not item-granted. */
+  itemName: string | null;
   description: string;
 }
 
@@ -184,6 +190,10 @@ export type Roll =
   | { kind: 'attack'; bonus: number; damage: DamagePart[]; optionalDamage: DamagePart[] }
   | { kind: 'save'; ability: AbilityName; dc: number; damage: DamagePart[] }
   | { kind: 'check'; bonus: number }
+  /** A spell with damage but no attack roll or saving throw. */
+  | { kind: 'damage'; damage: DamagePart[] }
+  /** A feature's dice whose meaning (damage, healing, a bonus) the import does not state. */
+  | { kind: 'dice'; dice: string }
   | { kind: 'none' };
 
 export type Cost =
@@ -194,14 +204,38 @@ export type Cost =
 export interface Ability {
   key: string;
   name: string;
-  source: 'spell' | 'class' | 'subclass' | 'item' | 'feat' | 'species' | 'universal' | 'custom';
+  /** The import cannot tell a subclass feature from a class feature; both are 'class'. */
+  source: 'spell' | 'class' | 'item' | 'feat' | 'species' | 'background' | 'universal' | 'custom';
   timing: Timing;
   roll: Roll;
   cost: Cost;
+  /** A pool shown on the row and spent by hand (a weapon's charges). Use never spends it. */
+  poolKey: string | null;
   tags: Tag[];
   concentration: boolean;
+  ritual: boolean;
   range: string | null;
   area: boolean;
   description: string;
+  /** Short facts from the sheet, shown on the row. */
+  notes: string[];
   tagSource: 'import' | 'curated' | 'user' | 'none';
+}
+
+/** Which parts of the current turn are used up. True means spent. */
+export interface TurnState {
+  action: boolean;
+  bonus: boolean;
+  reaction: boolean;
+  /** A spell slot was spent this turn; only one may be. */
+  slotSpentThisTurn: boolean;
+}
+
+/** Everything the app tracks during play. A new character starts with nothing spent. */
+export interface PlayState {
+  /** Pool key to the number spent. Keys: an ability or item key, `slot:1`..`slot:9`, or `pact`. */
+  spent: Record<string, number>;
+  /** Key of the ability being concentrated on. */
+  concentrationKey: string | null;
+  turn: TurnState;
 }
