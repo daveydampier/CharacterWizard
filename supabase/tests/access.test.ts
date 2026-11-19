@@ -175,4 +175,48 @@ describe('the database, beyond the shared rules', () => {
     expect(await b.as(DEE).pullCharacters(0)).toEqual([]);
     expect(await b.as(DEE).pullItems(0)).toEqual([]);
   });
+
+  it('refuses one row whose data is not valid, and takes the rest of the batch', async () => {
+    const b = await table();
+    const result = await b.as(ANN).pushCharacters([
+      character('bad', { importedAt: 'not a date' }),
+      character('good'),
+    ]);
+    expect(result).toEqual({ rejected: [{ id: 'bad', reason: 'refused' }] });
+    expect((await b.as(ANN).pullCharacters(0)).map((c) => c.id)).toEqual(['good']);
+  });
+
+  it('does not call an unexpected failure a refusal: it fails the call, so the device tries again', async () => {
+    const b = await table();
+    // Stands in for a deadlock, which PGlite's single connection cannot produce.
+    await db.exec(`
+      create function public.test_deadlock() returns trigger language plpgsql as $$
+      begin
+        raise exception 'deadlock detected' using errcode = '40P01';
+      end $$;
+      create trigger test_deadlock before insert on public.characters
+        for each row execute function public.test_deadlock();
+    `);
+    try {
+      await expect(b.as(ANN).pushCharacters([character('a1')])).rejects.toMatchObject({ kind: 'other' });
+    } finally {
+      await db.exec(`
+        drop trigger test_deadlock on public.characters;
+        drop function public.test_deadlock();
+      `);
+    }
+    expect(await b.as(ANN).pullCharacters(0)).toEqual([]);
+  });
+
+  it('takes the write lock in both push functions before it touches any row', async () => {
+    const rows = (await db.query<{ proname: string; prosrc: string }>(
+      `select proname, prosrc from pg_proc where proname in ('push_characters', 'push_items') order by proname`,
+    )).rows;
+    expect(rows.map((r) => r.proname)).toEqual(['push_characters', 'push_items']);
+    for (const { prosrc } of rows) {
+      const lock = prosrc.indexOf('pg_advisory_xact_lock(4242)');
+      expect(lock).toBeGreaterThan(-1);
+      expect(lock).toBeLessThan(prosrc.indexOf('for r in'));
+    }
+  });
 });

@@ -203,6 +203,10 @@ declare
   v_id text;
   rejected jsonb := '[]'::jsonb;
 begin
+  -- Taken before any row is locked, so that every writer queues in the same order. Without it,
+  -- two devices writing the same rows can deadlock, and two devices of one player can both
+  -- pass the ten-character count.
+  perform pg_advisory_xact_lock(4242);
   for r in select * from jsonb_array_elements(rows) loop
     v_id := r ->> 'id';
     begin
@@ -223,7 +227,14 @@ begin
           coalesce((r ->> 'deleted')::boolean, false)
         );
       end if;
-    exception when others then
+    exception
+      -- Refusals that will not change if the same row is sent again: the limit, a row that is
+      -- not the caller's, an id that is taken, data that is not valid. Anything else (a deadlock,
+      -- a timeout) is not a refusal: it propagates, the whole call fails, and the device tries again.
+      when raise_exception or insufficient_privilege or integrity_constraint_violation
+        or unique_violation or not_null_violation or check_violation or foreign_key_violation
+        or data_exception or invalid_datetime_format or datetime_field_overflow
+        or invalid_text_representation then
       rejected := rejected || jsonb_build_object(
         'id', v_id, 'reason', case when sqlerrm = 'character_limit' then 'limit' else 'refused' end);
     end;
@@ -238,6 +249,8 @@ language plpgsql security invoker set search_path = '' as $$
 declare
   r jsonb;
 begin
+  -- The same lock, taken first for the same reason as in push_characters.
+  perform pg_advisory_xact_lock(4242);
   for r in select * from jsonb_array_elements(rows) loop
     if not public.is_approved() or not exists (
       select 1 from public.characters c where c.id = r ->> 'character_id' and not c.deleted
@@ -302,6 +315,14 @@ revoke execute on function
   public.handle_new_user(), public.characters_before_write(), public.characters_after_delete(),
   public.items_before_write()
 from public, anon;
+
+-- The trigger functions are never called directly, by anyone.
+revoke execute on function
+  public.handle_new_user(), public.characters_before_write(), public.characters_after_delete(),
+  public.items_before_write()
+from authenticated;
+revoke all on sequence public.sync_rev from anon, authenticated;
+
 grant execute on function
   public.is_approved(), public.is_table_admin(), public.push_characters(jsonb), public.push_items(jsonb),
   public.set_player_approved(uuid, boolean), public.record_import()
