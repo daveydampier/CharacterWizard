@@ -101,4 +101,34 @@ describe('createScheduler', () => {
     await vi.advanceTimersByTimeAsync(60_000);
     expect(run).not.toHaveBeenCalled();
   });
+
+  it('stop resolves once the sync that was running has finished, and starts no other', async () => {
+    let release: () => void = () => undefined;
+    const run = vi.fn(() => new Promise<void>((resolve) => { release = resolve; }));
+    scheduler = createScheduler(run);
+    void scheduler.now();
+    void scheduler.now();
+    let stopped = false;
+    const stopping = scheduler.stop().then(() => { stopped = true; });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(stopped).toBe(false);
+    release();
+    await stopping;
+    expect(stopped).toBe(true);
+    // The second request, made while the first sync was running, is dropped by the stop.
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not sync after stop until it is started again', async () => {
+    const run = vi.fn(async () => undefined);
+    scheduler = createScheduler(run);
+    await scheduler.stop();
+    await scheduler.now();
+    scheduler.changed();
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(run).not.toHaveBeenCalled();
+    scheduler.start();
+    await scheduler.now();
+    expect(run).toHaveBeenCalledTimes(1);
+  });
 });

@@ -3,7 +3,8 @@ import { emptyPlayState } from '@cw/rules';
 import { loadRaw } from '../../../test-utils/fixtures';
 import { memoryStorage, type AppStorage } from './storage';
 import { cachedSheetCount, sheetFor, useStore } from './store';
-import { ability, putSavedPlay, rawWithId, savedPlay, seed, testRemote } from './test/helpers';
+import { syncOnce } from './sync/engine';
+import { ability, putSavedPlay, rawWithId, savedPlay, seed, testRemote, testServer } from './test/helpers';
 
 const sheetBuild = vi.hoisted(() => ({ fails: false }));
 
@@ -197,6 +198,28 @@ describe('open', () => {
     await seed('vlad');
     await state().open('no-such-id');
     expect(state()).toMatchObject({ openId: null, sheet: null });
+  });
+
+  it('closes the open character when what a sync fetched cannot be turned into a sheet', async () => {
+    const storage = memoryStorage();
+    const server = testServer();
+    const record = await seed('vlad', storage, testRemote(server));
+    await state().syncNow();
+    // Another device re-imports the character; the copy that arrives here cannot be built.
+    const other = { storage: memoryStorage(), remote: testRemote(server) };
+    await syncOnce(other);
+    const [theirs] = await other.storage.listCharacters();
+    const later = new Date().toISOString();
+    await other.storage.putCharacter({ ...theirs, importedAt: later, updatedAt: later, dirty: true });
+    await syncOnce(other);
+    sheetBuild.fails = true;
+    try {
+      await state().syncNow();
+    } finally {
+      sheetBuild.fails = false;
+    }
+    expect(state()).toMatchObject({ openId: null, sheet: null, loaded: false });
+    expect(state().characters.map((c) => c.id)).toEqual([record.id]);
   });
 });
 

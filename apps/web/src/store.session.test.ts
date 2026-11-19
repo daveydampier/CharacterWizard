@@ -249,6 +249,73 @@ describe('syncing', () => {
     expect((await inner.pullItems(0))[0].data).toMatchObject({ spent: { pact: 1 } });
   });
 
+  it('does not let a pill flipped during a fetch undo what another device spent', async () => {
+    const server = testServer();
+    const inner = testRemote(server);
+    let duringFetch: () => void = () => undefined;
+    const remote: Remote = {
+      ...inner,
+      async pullItems(afterRev) {
+        const rows = await inner.pullItems(afterRev);
+        duringFetch();
+        return rows;
+      },
+    };
+    const record = await seed('vlad', memoryStorage(), remote);
+    await state().syncNow();
+    const other = otherDevice(server);
+    await syncOnce(other);
+    await other.storage.putItem({
+      characterId: record.id, kind: 'play', key: 'state', data: { spent: { pact: 2 }, concentrationKey: null },
+      updatedAt: new Date().toISOString(), deleted: false, dirty: true,
+    });
+    await syncOnce(other);
+    duringFetch = () => {
+      duringFetch = () => undefined;
+      state().togglePill('reaction');
+    };
+    await state().syncNow();
+    // The turn is this device's own; what is spent is what the other device sent.
+    expect(state().play.turn.reaction).toBe(true);
+    expect(state().play.spent).toEqual({ pact: 2 });
+    await settle();
+    await state().syncNow();
+    expect((await inner.pullItems(0))[0].data).toMatchObject({ spent: { pact: 2 } });
+  });
+
+  it('keeps a change the player made while the fetched state was being read back', async () => {
+    const server = testServer();
+    const inner = testRemote(server);
+    const storage = memoryStorage();
+    const record = await seed('vlad', storage, inner);
+    await state().syncNow();
+    const other = otherDevice(server);
+    await syncOnce(other);
+    await other.storage.putItem({
+      characterId: record.id, kind: 'play', key: 'state', data: { spent: { pact: 2 }, concentrationKey: null },
+      updatedAt: new Date(Date.now() - 1000).toISOString(), deleted: false, dirty: true,
+    });
+    await syncOnce(other);
+    // The first read of this character's items is the store reading back what was fetched: tap then.
+    const listItems = storage.listItems;
+    let tapped = false;
+    storage.listItems = async (characterId?: string) => {
+      const rows = await listItems(characterId);
+      if (characterId !== undefined && !tapped) {
+        tapped = true;
+        state().use(ability('Hex'), 'combat');
+      }
+      return rows;
+    };
+    await state().syncNow();
+    storage.listItems = listItems;
+    expect(tapped).toBe(true);
+    expect(state().play.spent).toEqual({ pact: 1 });
+    await settle();
+    await state().syncNow();
+    expect((await inner.pullItems(0))[0].data).toMatchObject({ spent: { pact: 1 } });
+  });
+
   it('sends a deletion and then forgets the character entirely', async () => {
     const server = testServer();
     const storage = memoryStorage();
@@ -411,6 +478,39 @@ describe('signing out', () => {
     await seed('vlad');
     await state().signOut(true);
     expect(state()).toMatchObject({ session: null, syncState: 'saved' });
+  });
+
+  it('waits for a sync that is running, so nothing it fetched is left on the device', async () => {
+    const server = testServer();
+    const inner = testRemote(server);
+    let hold = false;
+    let release: () => void = () => undefined;
+    const remote: Remote = {
+      ...inner,
+      async pullCharacters(afterRev) {
+        const rows = await inner.pullCharacters(afterRev);
+        if (hold) await new Promise<void>((resolve) => { release = resolve; });
+        return rows;
+      },
+    };
+    const storage = memoryStorage();
+    await seed('vlad', storage, remote);
+    await state().syncNow();
+    // Another device adds a character, which the next fetch will bring here.
+    const other = otherDevice(server);
+    await other.storage.putCharacter(stored('ddb-7-user-test', { ddbId: '7', name: 'Second character' }));
+    await syncOnce(other);
+    hold = true;
+    const syncing = state().syncNow();
+    await settle();
+    const signingOut = state().signOut(true);
+    await settle();
+    release();
+    expect(await signingOut).toBe(true);
+    await syncing;
+    expect(state().session).toBeNull();
+    expect(await storage.listCharacters()).toEqual([]);
+    expect(await storage.listItems()).toEqual([]);
   });
 });
 

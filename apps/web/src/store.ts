@@ -209,7 +209,9 @@ export const useStore = create<AppStore>()((set, get) => {
   const change = (next: PlayState, undo: Undo | null): void => {
     const { openId, play, loaded } = get();
     if (openId === null || !loaded || next === play) return;
-    localChanges += 1;
+    // Only a change to what is spent counts. The turn never syncs, so flipping a pill during a
+    // fetch must not make this device's older spending win over what was fetched.
+    if (!same(playItem(next), playItem(play))) localChanges += 1;
     set({ play: next, undo });
     void save(savePlay(openId, next, play)).then((synced) => {
       if (synced) changedLocally();
@@ -225,7 +227,7 @@ export const useStore = create<AppStore>()((set, get) => {
     if (changed.size === 0 && !sent) return;
     const characters = live(await storage.listCharacters());
     set({ characters });
-    const { openId, play } = get();
+    const { openId } = get();
     if (openId === null || !changed.has(openId)) return;
     const character = characters.find((c) => c.id === openId);
     if (!character) {
@@ -234,16 +236,25 @@ export const useStore = create<AppStore>()((set, get) => {
       set({ ...closed });
       return;
     }
-    const sheet = sheetFor(character);
-    if (localChanges !== changesBefore) {
-      // The player changed something while the fetch was running: what is on screen is the newest
-      // copy. It is written again, stamped later than what was fetched, and sent.
-      const kept = clampState(play, sheet);
+    let sheet: Sheet;
+    try {
+      sheet = sheetFor(character);
+    } catch {
+      // What was fetched cannot be turned into a sheet (a record damaged in the account, say).
+      sheetCache.delete(openId);
+      set({ ...closed });
+      return;
+    }
+    /** What is on screen is the newest copy: it is written again, stamped later than what was fetched, and sent. */
+    const keepScreen = async (): Promise<void> => {
+      if (get().openId !== openId) return;
+      const kept = clampState(get().play, sheet);
       set({ sheet, play: kept });
       await save(savePlay(openId, kept, null));
       changedLocally();
-      return;
-    }
+    };
+    // The player changed what is spent while the fetch was running.
+    if (localChanges !== changesBefore) return keepScreen();
     let saved: PlayState;
     try {
       saved = await loadPlay(openId);
@@ -252,8 +263,11 @@ export const useStore = create<AppStore>()((set, get) => {
       set({ persistent: false });
       return;
     }
+    if (get().openId !== openId) return;
+    // Or changed it while the fetched state was being read back.
+    if (localChanges !== changesBefore) return keepScreen();
     // The turn never syncs, so the one in memory is the newest.
-    if (get().openId === openId) set({ sheet, play: { ...clampState(saved, sheet), turn: get().play.turn }, undo: null });
+    set({ sheet, play: { ...clampState(saved, sheet), turn: get().play.turn }, undo: null });
   };
 
   /** No longer a table admin: the other players' characters leave this device. */
@@ -307,6 +321,8 @@ export const useStore = create<AppStore>()((set, get) => {
     }
     if (session && session.userId !== userId) {
       // A different account on this device: the previous account's copy must not be shown to it.
+      // No sync for the previous account may write to this device after it has been emptied.
+      await scheduler?.stop();
       await save(storage.clear());
       sheetCache.clear();
       set({ characters: [], ...closed });
@@ -330,7 +346,7 @@ export const useStore = create<AppStore>()((set, get) => {
   let starting: Promise<void> | null = null;
 
   const start = async (storageOverride?: AppStorage, remoteOverride?: Remote): Promise<void> => {
-    scheduler?.stop();
+    await scheduler?.stop();
     let persistent = true;
     if (storageOverride) storage = storageOverride;
     else ({ storage, persistent } = await openStorage());
@@ -386,7 +402,8 @@ export const useStore = create<AppStore>()((set, get) => {
         await scheduler?.now();
         if (await hasUnsynced(storage).catch(() => false)) return false;
       }
-      scheduler?.stop();
+      // No sync may write to this device after it has been emptied: wait for one that is running.
+      await scheduler?.stop();
       const { persistent } = get();
       // Signed out on this device first, so the account's own "nobody is signed in" is not news.
       set({ ...initial, ready: true, persistent });

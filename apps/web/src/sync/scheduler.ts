@@ -12,7 +12,12 @@ export interface Scheduler {
   now(): Promise<void>;
   /** Start syncing on a timer, when the app comes back on screen and when a connection returns. */
   start(): void;
-  stop(): void;
+  /**
+   * Stops syncing: no timer, no listener, and no new sync until `start` is called again.
+   * Resolves once a sync that was already running has finished, so that the caller can then
+   * empty the device without that sync writing to it afterwards.
+   */
+  stop(): Promise<void>;
 }
 
 /**
@@ -26,8 +31,11 @@ export function createScheduler(run: () => Promise<void>, options: SchedulerOpti
   let interval: ReturnType<typeof setInterval> | null = null;
   let running: Promise<void> | null = null;
   let again = false;
+  /** True from `stop` until `start`: nothing new may run. */
+  let stopped = false;
 
   const now = (): Promise<void> => {
+    if (stopped) return running ?? Promise.resolve();
     if (running) {
       again = true;
       return running;
@@ -36,7 +44,7 @@ export function createScheduler(run: () => Promise<void>, options: SchedulerOpti
       do {
         again = false;
         await run().catch(() => undefined);
-      } while (again);
+      } while (again && !stopped);
       running = null;
     })();
     return running;
@@ -51,6 +59,7 @@ export function createScheduler(run: () => Promise<void>, options: SchedulerOpti
 
   return {
     changed() {
+      if (stopped) return;
       if (debounce) clearTimeout(debounce);
       debounce = setTimeout(() => {
         debounce = null;
@@ -59,18 +68,22 @@ export function createScheduler(run: () => Promise<void>, options: SchedulerOpti
     },
     now,
     start() {
+      stopped = false;
       if (interval) return;
       interval = setInterval(onVisible, intervalMs);
       document.addEventListener('visibilitychange', onVisible);
       window.addEventListener('online', onOnline);
     },
     stop() {
+      stopped = true;
+      again = false;
       if (debounce) clearTimeout(debounce);
       if (interval) clearInterval(interval);
       debounce = null;
       interval = null;
       document.removeEventListener('visibilitychange', onVisible);
       window.removeEventListener('online', onOnline);
+      return running ?? Promise.resolve();
     },
   };
 }
