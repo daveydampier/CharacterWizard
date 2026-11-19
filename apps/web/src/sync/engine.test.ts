@@ -390,10 +390,10 @@ describe('first sign-in on a device', () => {
 
   it('claims two ownerless copies of one character into one, keeping the later', async () => {
     const storage = memoryStorage();
-    await storage.putCharacter(ownerless('local-1', '42', { name: 'Older copy' }));
-    await storage.putItem(item('local-1', 'edit', 'spell:1', { data: { from: 'older' } }));
-    await storage.putCharacter(ownerless('local-2', '42', { name: 'Newer copy', importedAt: T2, updatedAt: T2 }));
-    await storage.putItem(item('local-2', 'play', 'state', { data: { from: 'newer' } }));
+    await storage.putCharacter(ownerless('local-1', '42', { name: 'Newer copy', importedAt: T2, updatedAt: T2 }));
+    await storage.putItem(item('local-1', 'play', 'state', { data: { from: 'newer' } }));
+    await storage.putCharacter(ownerless('local-2', '42', { name: 'Older copy' }));
+    await storage.putItem(item('local-2', 'edit', 'spell:1', { data: { from: 'older' } }));
     await claimLocalCharacters(storage, ANN);
     const all = await storage.listCharacters();
     expect(all.map((c) => [c.id, c.name, c.ownerId, c.dirty])).toEqual([['ddb-42-user-ann', 'Newer copy', ANN, true]]);
