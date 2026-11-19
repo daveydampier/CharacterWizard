@@ -1,6 +1,7 @@
-import type { Ability } from '@cw/model';
+import type { Ability, PlayState } from '@cw/model';
+import { normalisePlayItem, normaliseTurn } from '@cw/rules';
 import { loadRaw, type Slug } from '../../../../test-utils/fixtures';
-import { memoryStorage, type AppStorage, type StoredCharacter } from '../storage';
+import { STATE_KEY, memoryStorage, type AppStorage, type StoredCharacter } from '../storage';
 import { useStore } from '../store';
 
 /** A fixture's raw JSON with its D&D Beyond ID replaced, so two fixtures can be stored side by side. */
@@ -28,4 +29,20 @@ export function ability(name: string, cost?: Ability['cost']['kind']): Ability {
   );
   if (!found) throw new Error(`no ability ${name}`);
   return found;
+}
+
+/** The play state a storage holds for a character, put back together from its two items. Null when it holds neither. */
+export async function savedPlay(storage: AppStorage, characterId: string): Promise<PlayState | null> {
+  const items = (await storage.listItems(characterId)).filter((item) => item.key === STATE_KEY && !item.deleted);
+  const play = items.find((item) => item.kind === 'play');
+  const turn = items.find((item) => item.kind === 'turn');
+  if (!play && !turn) return null;
+  return { ...normalisePlayItem(play?.data), turn: normaliseTurn(turn?.data) };
+}
+
+/** Writes a play state straight into a storage, as its two items, behind the store's back. */
+export async function putSavedPlay(storage: AppStorage, characterId: string, state: PlayState): Promise<void> {
+  const base = { characterId, key: STATE_KEY, updatedAt: '2026-11-18T12:00:00.000Z', deleted: false };
+  await storage.putItem({ ...base, kind: 'play', data: { spent: state.spent, concentrationKey: state.concentrationKey }, dirty: true });
+  await storage.putItem({ ...base, kind: 'turn', data: state.turn, dirty: false });
 }

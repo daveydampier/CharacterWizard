@@ -1,26 +1,50 @@
-import type { PlayState } from '@cw/model';
-import type { AppStorage, StoredCharacter } from './types';
+import type { AppStorage, StoredCharacter, StoredItem } from './types';
+
+const itemId = (characterId: string, kind: string, key: string): string => JSON.stringify([characterId, kind, key]);
 
 /** Keeps everything in memory. Used in tests, and as the fallback when IndexedDB is unavailable. */
 export function memoryStorage(): AppStorage {
   const characters = new Map<string, StoredCharacter>();
-  const play = new Map<string, PlayState>();
+  const items = new Map<string, StoredItem>();
+  const meta = new Map<string, unknown>();
+  const itemsOf = (characterId: string): StoredItem[] => [...items.values()].filter((i) => i.characterId === characterId);
   return {
     async listCharacters() {
-      return [...characters.values()];
+      return structuredClone([...characters.values()]);
     },
     async putCharacter(character) {
-      characters.set(character.id, character);
+      characters.set(character.id, structuredClone(character));
     },
-    async deleteCharacter(id) {
+    async removeCharacter(id) {
       characters.delete(id);
-      play.delete(id);
+      for (const item of itemsOf(id)) items.delete(itemId(item.characterId, item.kind, item.key));
     },
-    async getPlay(characterId) {
-      return play.get(characterId) ?? null;
+    async rekeyCharacter(oldId, character) {
+      const moved = itemsOf(oldId);
+      characters.delete(oldId);
+      for (const item of moved) items.delete(itemId(item.characterId, item.kind, item.key));
+      characters.set(character.id, structuredClone(character));
+      for (const item of moved) items.set(itemId(character.id, item.kind, item.key), { ...item, characterId: character.id });
     },
-    async putPlay(characterId, state) {
-      play.set(characterId, state);
+    async listItems(characterId) {
+      return structuredClone(characterId === undefined ? [...items.values()] : itemsOf(characterId));
+    },
+    async putItem(item) {
+      items.set(itemId(item.characterId, item.kind, item.key), structuredClone(item));
+    },
+    async removeItem(characterId, kind, key) {
+      items.delete(itemId(characterId, kind, key));
+    },
+    async getMeta(name) {
+      return meta.has(name) ? structuredClone(meta.get(name)) : null;
+    },
+    async setMeta(name, value) {
+      meta.set(name, structuredClone(value));
+    },
+    async clear() {
+      characters.clear();
+      items.clear();
+      meta.clear();
     },
   };
 }

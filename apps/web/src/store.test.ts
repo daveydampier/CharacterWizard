@@ -2,8 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { emptyPlayState } from '@cw/rules';
 import { loadRaw } from '../../../test-utils/fixtures';
 import { memoryStorage, type AppStorage } from './storage';
-import { sheetFor, useStore } from './store';
-import { ability, rawWithId, seed } from './test/helpers';
+import { cachedSheetCount, sheetFor, useStore } from './store';
+import { ability, putSavedPlay, rawWithId, savedPlay, seed } from './test/helpers';
 
 const sheetBuild = vi.hoisted(() => ({ fails: false }));
 
@@ -47,7 +47,8 @@ describe('saveImported', () => {
     await state().init(storage);
     const raw = loadRaw('vlad');
     const record = await state().saveImported(raw);
-    expect(record).toMatchObject({ ddbId: '1', name: 'Vlad', rawJson: raw });
+    expect(record).toMatchObject({ ddbId: '1', name: 'Vlad', rawJson: raw, deleted: false, dirty: true });
+    expect(record?.updatedAt).toBe(record?.importedAt);
     expect(record?.id).toMatch(/^[0-9a-f-]{36}$/);
     expect(Number.isNaN(Date.parse(record?.importedAt ?? ''))).toBe(false);
     expect(await storage.listCharacters()).toEqual([record]);
@@ -99,7 +100,7 @@ describe('saveImported', () => {
     const second = await state().saveImported(loadRaw('vlad'));
     expect(second?.id).toBe(first.id);
     expect(state().characters).toHaveLength(1);
-    expect(await storage.getPlay(first.id)).toMatchObject({ spent: { pact: 2 }, concentrationKey: null });
+    expect(await savedPlay(storage, first.id)).toMatchObject({ spent: { pact: 2 }, concentrationKey: null });
     expect(state().play.spent).toEqual({ pact: 2 });
   });
 
@@ -108,16 +109,16 @@ describe('saveImported', () => {
     const record = await seed('vlad', storage);
     await state().open('missing');
     expect(state().openId).toBeNull();
-    await storage.putPlay(record.id, { ...emptyPlayState(), spent: { pact: 9, gone: 3 }, concentrationKey: 'not-there' });
+    await putSavedPlay(storage, record.id, { ...emptyPlayState(), spent: { pact: 9, gone: 3 }, concentrationKey: 'not-there' });
     await state().saveImported(loadRaw('vlad'));
-    expect(await storage.getPlay(record.id)).toMatchObject({ spent: { pact: 2 }, concentrationKey: null });
+    expect(await savedPlay(storage, record.id)).toMatchObject({ spent: { pact: 2 }, concentrationKey: null });
     expect(state().openId).toBeNull();
   });
 
   it('keeps the open character\'s unsaved play state when it is re-imported', async () => {
     const storage = memoryStorage();
     const record = await seed('vlad', storage);
-    storage.putPlay = async () => { throw new Error('quota'); };
+    storage.putItem = async () => { throw new Error('quota'); };
     state().use(ability('Hex'), 'combat');
     await settle();
     expect(state().persistent).toBe(false);
@@ -146,13 +147,48 @@ describe('open', () => {
   it('keeps the play state in memory when the open character is opened again', async () => {
     const storage = memoryStorage();
     const record = await seed('vlad', storage);
-    storage.putPlay = async () => { throw new Error('quota'); };
+    storage.putItem = async () => { throw new Error('quota'); };
     state().use(ability('Hex'), 'combat');
     await settle();
     expect(state().persistent).toBe(false);
     await state().open(record.id);
     expect(state().openId).toBe(record.id);
     expect(state().play.spent).toEqual({ pact: 1 });
+  });
+
+  it('is not loaded until the saved play state has been read, and ignores changes until then', async () => {
+    const storage = memoryStorage();
+    const record = await seed('vlad', storage);
+    state().use(ability('Hex'), 'combat');
+    await settle();
+    await state().init(storage);
+    const opening = state().open(record.id);
+    expect(state()).toMatchObject({ openId: record.id, loaded: false });
+    state().use(ability('Arms of Hadar'), 'combat');
+    state().togglePill('action');
+    expect(state().play).toEqual(emptyPlayState());
+    await opening;
+    expect(state().loaded).toBe(true);
+    expect(state().play.spent).toEqual({ pact: 1 });
+    await settle();
+    expect((await savedPlay(storage, record.id))?.spent).toEqual({ pact: 1 });
+  });
+
+  it('repairs saved play state that is malformed', async () => {
+    const storage = memoryStorage();
+    const record = await seed('vlad', storage);
+    await storage.putItem({
+      characterId: record.id, kind: 'play', key: 'state', data: { concentrationKey: 12 },
+      updatedAt: '2026-11-18T12:00:00.000Z', deleted: false, dirty: true,
+    });
+    await storage.putItem({
+      characterId: record.id, kind: 'turn', key: 'state', data: 'nonsense',
+      updatedAt: '2026-11-18T12:00:00.000Z', deleted: false, dirty: false,
+    });
+    await state().init(storage);
+    await state().open(record.id);
+    expect(state().loaded).toBe(true);
+    expect(state().play).toEqual(emptyPlayState());
   });
 
   it('opens nothing for an unknown ID', async () => {
@@ -170,13 +206,16 @@ describe('play', () => {
     expect(state().play).toMatchObject({ spent: { pact: 1 }, turn: { bonus: true, slotSpentThisTurn: true } });
     expect(state().undo?.message).toBe('Used Hex. Spent: Bonus Action, a pact slot.');
     await settle();
-    expect(await storage.getPlay(record.id)).toEqual(state().play);
+    expect(await savedPlay(storage, record.id)).toEqual(state().play);
+    const items = await storage.listItems(record.id);
+    expect(items.find((item) => item.kind === 'play')).toMatchObject({ dirty: true, deleted: false });
+    expect(items.find((item) => item.kind === 'turn')).toMatchObject({ dirty: false });
 
     state().undoLast();
     expect(state().play).toEqual(emptyPlayState());
     expect(state().undo).toBeNull();
     await settle();
-    expect(await storage.getPlay(record.id)).toEqual(emptyPlayState());
+    expect(await savedPlay(storage, record.id)).toEqual(emptyPlayState());
   });
 
   it('does nothing when the ability cannot be used', async () => {
@@ -230,10 +269,25 @@ describe('play', () => {
     expect(state().play.concentrationKey).toBeNull();
   });
 
+  it('does not rewrite the synced play item when only the turn changes', async () => {
+    const storage = memoryStorage();
+    const record = await seed('vlad', storage);
+    state().use(ability('Hex'), 'combat');
+    await settle();
+    const before = (await storage.listItems(record.id)).find((item) => item.kind === 'play');
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    state().togglePill('action');
+    state().startTurn();
+    await settle();
+    const after = (await storage.listItems(record.id)).find((item) => item.kind === 'play');
+    expect(after?.updatedAt).toBe(before?.updatedAt);
+    expect((await savedPlay(storage, record.id))?.turn.action).toBe(false);
+  });
+
   it('turns on the not-saving flag when a write fails, and keeps the change', async () => {
     const storage = memoryStorage();
     await seed('vlad', storage);
-    storage.putPlay = async () => { throw new Error('quota'); };
+    storage.putItem = async () => { throw new Error('quota'); };
     state().use(ability('Hex'), 'combat');
     await settle();
     expect(state().persistent).toBe(false);
@@ -250,7 +304,14 @@ describe('remove', () => {
     await state().remove(record.id);
     expect(state()).toMatchObject({ characters: [], openId: null, sheet: null });
     expect(await storage.listCharacters()).toEqual([]);
-    expect(await storage.getPlay(record.id)).toBeNull();
+    expect(await savedPlay(storage, record.id)).toBeNull();
+  });
+
+  it('drops the cached sheet', async () => {
+    const record = await seed('vlad');
+    const before = cachedSheetCount();
+    await state().remove(record.id);
+    expect(cachedSheetCount()).toBe(before - 1);
   });
 });
 
@@ -262,5 +323,15 @@ describe('sheetFor', () => {
     if (!again) throw new Error('re-import failed');
     expect(again.importedAt >= first.importedAt).toBe(true);
     expect(sheetFor(again).name).toBe('Vlad');
+  });
+
+  it('keeps one sheet per character however often it is re-imported', async () => {
+    await seed('vlad');
+    const before = cachedSheetCount();
+    for (let i = 0; i < 3; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 2));
+      await state().saveImported(loadRaw('vlad'));
+    }
+    expect(cachedSheetCount()).toBe(before);
   });
 });

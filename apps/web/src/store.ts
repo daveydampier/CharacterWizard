@@ -1,11 +1,12 @@
 import { convertCharacter } from '@cw/ddb-import';
 import type { Ability, PlayState } from '@cw/model';
 import {
-  adjustPool, applyUse, buildSheet, clampState, emptyPlayState, endConcentration, pools, rest,
-  startTurn, togglePill, useSummary, type Sheet, type TurnTiming, type ViewMode,
+  adjustPool, applyUse, buildSheet, clampState, emptyPlayState, endConcentration, normalisePlayItem,
+  normaliseTurn, pools, rest, startTurn, togglePill, useSummary, type PlayItem, type Sheet,
+  type TurnTiming, type ViewMode,
 } from '@cw/rules';
 import { create } from 'zustand';
-import { memoryStorage, openStorage, type AppStorage, type StoredCharacter } from './storage';
+import { STATE_KEY, memoryStorage, openStorage, type AppStorage, type StoredCharacter } from './storage';
 
 export interface Undo {
   /** The play state to go back to. */
@@ -23,6 +24,8 @@ export interface AppStore {
   openId: string | null;
   sheet: Sheet | null;
   play: PlayState;
+  /** False while the open character's saved play state is still being read. Nothing can be changed until it is. */
+  loaded: boolean;
   /** One step, held in memory only. */
   undo: Undo | null;
 
@@ -43,17 +46,49 @@ export interface AppStore {
 
 let storage: AppStorage = memoryStorage();
 
-const sheetCache = new Map<string, Sheet>();
+/** One sheet per character: a re-import replaces it and a delete drops it. */
+const sheetCache = new Map<string, { importedAt: string; sheet: Sheet }>();
 
 /** The calculated sheet for a stored character. Converted from the raw JSON on first use. */
 export function sheetFor(character: StoredCharacter): Sheet {
-  const cacheKey = `${character.id}|${character.importedAt}`;
-  let sheet = sheetCache.get(cacheKey);
-  if (!sheet) {
-    sheet = buildSheet(convertCharacter(character.rawJson));
-    sheetCache.set(cacheKey, sheet);
-  }
+  const cached = sheetCache.get(character.id);
+  if (cached && cached.importedAt === character.importedAt) return cached.sheet;
+  const sheet = buildSheet(convertCharacter(character.rawJson));
+  sheetCache.set(character.id, { importedAt: character.importedAt, sheet });
   return sheet;
+}
+
+/** How many sheets are cached. For tests. */
+export const cachedSheetCount = (): number => sheetCache.size;
+
+const playItem = (state: PlayState): PlayItem => ({ spent: state.spent, concentrationKey: state.concentrationKey });
+const same = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
+
+/** A character's saved play state, repaired where it is malformed. Empty when nothing is saved. */
+async function loadPlay(id: string): Promise<PlayState> {
+  const items = await storage.listItems(id);
+  const data = (kind: 'play' | 'turn'): unknown =>
+    items.find((item) => item.kind === kind && item.key === STATE_KEY && !item.deleted)?.data;
+  return { ...normalisePlayItem(data('play')), turn: normaliseTurn(data('turn')) };
+}
+
+/**
+ * Saves a play state as its two items: what is spent (which syncs) and the turn (which does not).
+ * An item is written only when it differs from `previous`, so flipping a pill does not touch the
+ * synced item.
+ */
+async function savePlay(id: string, next: PlayState, previous: PlayState | null): Promise<void> {
+  const updatedAt = new Date().toISOString();
+  if (!previous || !same(playItem(next), playItem(previous))) {
+    await storage.putItem({
+      characterId: id, kind: 'play', key: STATE_KEY, data: playItem(next), updatedAt, deleted: false, dirty: true,
+    });
+  }
+  if (!previous || !same(next.turn, previous.turn)) {
+    await storage.putItem({
+      characterId: id, kind: 'turn', key: STATE_KEY, data: next.turn, updatedAt, deleted: false, dirty: false,
+    });
+  }
 }
 
 /**
@@ -76,6 +111,7 @@ const initial = {
   openId: null as string | null,
   sheet: null as Sheet | null,
   play: emptyPlayState(),
+  loaded: false,
   undo: null as Undo | null,
 };
 
@@ -91,10 +127,10 @@ export const useStore = create<AppStore>()((set, get) => {
 
   /** Applies a play change to the open character and saves it. */
   const change = (next: PlayState, undo: Undo | null): void => {
-    const { openId, play } = get();
-    if (openId === null || next === play) return;
+    const { openId, play, loaded } = get();
+    if (openId === null || !loaded || next === play) return;
     set({ play: next, undo });
-    void save(storage.putPlay(openId, next));
+    void save(savePlay(openId, next, play));
   };
 
   return {
@@ -119,12 +155,17 @@ export const useStore = create<AppStore>()((set, get) => {
       const ddbId = String(converted.id);
       // An ID of 0 means the JSON had none, so it can never match a stored character.
       const existing = ddbId === '0' ? undefined : get().characters.find((c) => c.ddbId === ddbId);
+      const importedAt = new Date().toISOString();
       const record: StoredCharacter = {
         id: existing?.id ?? newId(),
+        ownerId: existing?.ownerId ?? null,
         ddbId,
         name: converted.name || 'Unnamed character',
         rawJson: raw,
-        importedAt: new Date().toISOString(),
+        importedAt,
+        updatedAt: importedAt,
+        deleted: false,
+        dirty: true,
       };
       try {
         sheetFor(record);
@@ -139,36 +180,38 @@ export const useStore = create<AppStore>()((set, get) => {
         if (get().openId === record.id) {
           // The open character's play state in memory is the newest copy.
           const sheet = sheetFor(record);
-          const play = clampState(get().play, sheet);
+          const before = get().play;
+          const play = clampState(before, sheet);
           set({ sheet, play, undo: null });
-          await save(storage.putPlay(record.id, play));
+          await save(savePlay(record.id, play, before));
         } else {
-          const saved = await storage.getPlay(record.id).catch(() => null);
-          if (saved) await save(storage.putPlay(record.id, clampState(saved, sheetFor(record))));
+          const saved = await loadPlay(record.id).catch(() => null);
+          if (saved) await save(savePlay(record.id, clampState(saved, sheetFor(record)), saved));
         }
       }
       return record;
     },
 
     async remove(id) {
-      await save(storage.deleteCharacter(id));
+      await save(storage.removeCharacter(id));
+      sheetCache.delete(id);
       set({ characters: get().characters.filter((c) => c.id !== id) });
-      if (get().openId === id) set({ openId: null, sheet: null, play: emptyPlayState(), undo: null });
+      if (get().openId === id) set({ openId: null, sheet: null, play: emptyPlayState(), loaded: false, undo: null });
     },
 
     async open(id) {
       const character = get().characters.find((c) => c.id === id);
       if (!character) {
-        set({ openId: null, sheet: null, play: emptyPlayState(), undo: null });
+        set({ openId: null, sheet: null, play: emptyPlayState(), loaded: false, undo: null });
         return;
       }
       // Already open: the play state in memory is the newest copy, even if saving it failed.
       if (get().openId === id && get().sheet) return;
       const sheet = sheetFor(character);
-      set({ openId: id, sheet, play: emptyPlayState(), undo: null });
-      const saved = await storage.getPlay(id).catch(() => null);
+      set({ openId: id, sheet, play: emptyPlayState(), loaded: false, undo: null });
+      const saved = await loadPlay(id).catch(() => emptyPlayState());
       // Ignore the answer if the player has already moved to another character.
-      if (saved && get().openId === id) set({ play: clampState(saved, sheet) });
+      if (get().openId === id) set({ play: clampState(saved, sheet), loaded: true });
     },
 
     use(ability, mode, slot) {
