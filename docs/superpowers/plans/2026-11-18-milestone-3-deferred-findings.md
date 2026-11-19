@@ -66,18 +66,18 @@ The whole of Part A was reviewed once more after its last task. It found nothing
 
 - An account that had signed in but was not approved could take the lock that every write waits for, and so hold up the table's syncing. Both write functions now check the caller before they take it.
 - Opening the app with no connection, more than an hour after it was last used, said "Sign in again to sync". The sign-in had not ended; the account just could not be reached to renew it. The app now says the changes are waiting, and carries on once the connection is back.
-- No call to the account had a time limit, so one stalled request held up every later sync, and sign-out with it. Each call now gives up after 20 seconds, and a fetch asks for a page at a time (5 characters, 500 items).
+- No call to the account had a time limit, so one stalled request held up every later sync, and sign-out with it. Each call that reads or writes data now gives up after 20 seconds, and a fetch asks for a page at a time (5 characters, 500 items).
 
 Also fixed: anyone who signed in before the database script was applied gets a profile when it is applied.
 
 Settle before Part B adds edits, because an edit is not written again by the next tap the way play state is:
 
 - The sync engine and the store read a record, decide, and write it back in separate storage calls. A change the player makes in between is overwritten and marked as sent. The gap is a few milliseconds. Make each of these one storage operation.
-- The item cursor moves past items whose character the device does not hold yet. A character that arrives a round later, or comes back after being deleted on the device, arrives without its older items. Start the item fetch from the beginning when a character becomes live on the device.
+- The item cursor moves past items whose character the device does not hold yet. A character that arrives a round later, or comes back after being deleted on the device, arrives without its older items. Since a fetch now comes a page at a time, this no longer needs unlucky timing: when a table admin's first fetch is cut short on a weak signal, the characters that arrive in the next round come without their play state until their player next changes something. Start the item fetch from the beginning when a character becomes live on the device.
 
 Left, smallest first:
 
-- The limits are guesses: 20 seconds a call, 8 seconds at start-up, 5 characters and 500 items a page. Nobody has measured a real sheet on a weak signal. A call that is given up on is not cancelled; its answer is ignored.
+- The limits are guesses: 20 seconds a call, 8 seconds at start-up, 5 characters and 500 items a page. Nobody has measured a real sheet on a weak signal. A call that is given up on is not cancelled; its answer is ignored. Sign-out's own request to the account has no limit, but the device is emptied before it is made.
 - The upgrade from version 1 storage stamps play state with the time of the upgrade, so at first sign-in it beats newer play state in the account. Use the import time.
 - On a device whose clock runs more than about two seconds fast, its own change comes back with a capped time, counts as a change from elsewhere, and clears Undo.
 - A character the account refused is marked as sent, and the line reads "Saved to your account".
@@ -100,5 +100,5 @@ Left, smallest first:
 - The app has not been opened on a real phone. The walk-throughs ran in a desktop browser at 375 by 812 against the in-memory account.
 - Whether Discord sign-in returns to an app installed to an iPhone's home screen. Milestone 5 must check before install is offered.
 - Whether a successful fetch from the character service redirects. An unknown ID answers 403 directly; the import function now follows no redirects.
-- An offline start, end to end: sign in, wait more than an hour, turn on aeroplane mode, open the app. It should say the changes are waiting, not "Sign in again to sync", and sync by itself within a minute of the connection coming back. Tests cover the app's side; the auth library's side was read in its source, not run. Check it in Task 13.
+- An offline start, end to end: sign in, wait more than an hour, turn on aeroplane mode, open the app. It should say the changes are waiting, not "Sign in again to sync", and sync by itself within about two minutes of the connection coming back, while the app is on screen (the auth library waits a minute after a renewal fails, then tries every 30 seconds). Tests cover the app's side; the auth library's side was read in its source, not run. Check it in Task 13.
 - What the screen shows between returning from Discord and the sign-in finishing. From the code, the sign-in screen shows again for a moment.
