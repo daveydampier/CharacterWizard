@@ -424,3 +424,66 @@ describe('import', () => {
     expect((await state().importCharacter('1')).status).toBe('ok');
   });
 });
+
+describe('saved state that cannot be read', () => {
+  it('leaves the character closed, says the device is not saving, and overwrites nothing', async () => {
+    const storage = memoryStorage();
+    const server = testServer();
+    const record = await seed('vlad', storage, testRemote(server));
+    state().use(ability('Hex'), 'combat');
+    await settle();
+    await state().init(storage, testRemote(server));
+    const listItems = storage.listItems;
+    storage.listItems = async () => { throw new Error('blocked'); };
+    await state().open(record.id);
+    expect(state()).toMatchObject({ openId: null, sheet: null, loaded: false, persistent: false });
+    // Nothing can be changed, so nothing is written over what could not be read.
+    state().togglePill('action');
+    await settle();
+    storage.listItems = listItems;
+    expect(await savedPlay(storage, record.id)).toMatchObject({ spent: { pact: 1 }, turn: { action: false, bonus: true } });
+  });
+
+  it('opens the character once the saved state can be read again', async () => {
+    const storage = memoryStorage();
+    const server = testServer();
+    const record = await seed('vlad', storage, testRemote(server));
+    state().use(ability('Hex'), 'combat');
+    await settle();
+    await state().init(storage, testRemote(server));
+    const listItems = storage.listItems;
+    storage.listItems = async () => { throw new Error('blocked'); };
+    await state().open(record.id);
+    storage.listItems = listItems;
+    await state().open(record.id);
+    expect(state()).toMatchObject({ openId: record.id, loaded: true });
+    expect(state().play.spent).toEqual({ pact: 1 });
+  });
+
+  it('keeps what is on screen when a fetched change cannot be read back', async () => {
+    const server = testServer();
+    const storage = memoryStorage();
+    const record = await seed('vlad', storage, testRemote(server));
+    state().use(ability('Hex'), 'combat');
+    await settle();
+    await state().syncNow();
+    const other = otherDevice(server);
+    await syncOnce(other);
+    await other.storage.putItem({
+      characterId: record.id, kind: 'play', key: 'state', data: { spent: { pact: 2 }, concentrationKey: null },
+      updatedAt: new Date(Date.now() + 1000).toISOString(), deleted: false, dirty: true,
+    });
+    await syncOnce(other);
+    // The engine lists every item at once; the store reads one character's. Only the second fails.
+    const listItems = storage.listItems;
+    storage.listItems = async (characterId?: string) => {
+      if (characterId !== undefined) throw new Error('blocked');
+      return listItems();
+    };
+    await state().syncNow();
+    expect(state().play.spent).toEqual({ pact: 1 });
+    expect(state().undo).not.toBeNull();
+    expect(state().persistent).toBe(false);
+    expect(state().openId).toBe(record.id);
+  });
+});

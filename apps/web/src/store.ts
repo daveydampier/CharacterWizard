@@ -244,7 +244,14 @@ export const useStore = create<AppStore>()((set, get) => {
       changedLocally();
       return;
     }
-    const saved = await loadPlay(openId).catch(() => emptyPlayState());
+    let saved: PlayState;
+    try {
+      saved = await loadPlay(openId);
+    } catch {
+      // What was fetched could not be read back: what is on screen stays, and is not replaced by nothing.
+      set({ persistent: false });
+      return;
+    }
     // The turn never syncs, so the one in memory is the newest.
     if (get().openId === openId) set({ sheet, play: { ...clampState(saved, sheet), turn: get().play.turn }, undo: null });
   };
@@ -497,7 +504,15 @@ export const useStore = create<AppStore>()((set, get) => {
         return;
       }
       set({ ...closed, openId: id, sheet });
-      const saved = await loadPlay(id).catch(() => emptyPlayState());
+      let saved: PlayState;
+      try {
+        saved = await loadPlay(id);
+      } catch {
+        // What is saved could not be read. Opening with an empty state would let the next change
+        // overwrite it, here and in the account, so the character stays closed.
+        if (get().openId === id) set({ ...closed, persistent: false });
+        return;
+      }
       // Ignore the answer if the player has already moved to another character.
       if (get().openId === id) set({ play: clampState(saved, sheet), loaded: true });
     },
