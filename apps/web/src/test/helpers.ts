@@ -1,6 +1,8 @@
 import type { Ability, PlayState } from '@cw/model';
 import { normalisePlayItem, normaliseTurn } from '@cw/rules';
 import { loadRaw, type Slug } from '../../../../test-utils/fixtures';
+import { memoryServer, type MemoryRemote, type MemoryServer } from '../remote/memory';
+import type { Remote } from '../remote/types';
 import { STATE_KEY, memoryStorage, type AppStorage, type StoredCharacter } from '../storage';
 import { useStore } from '../store';
 
@@ -11,9 +13,27 @@ export function rawWithId(slug: Slug, ddbId: number): any {
   return raw;
 }
 
-/** A fresh store on in-memory storage, holding one imported fixture, which is opened. */
-export async function seed(slug: Slug, storage: AppStorage = memoryStorage()): Promise<StoredCharacter> {
-  await useStore.getState().init(storage);
+/** The approved player most tests are signed in as. */
+export const TEST_USER = 'user-test';
+
+/** An in-memory account that already knows the test player. */
+export function testServer(): MemoryServer {
+  const server = memoryServer();
+  server.addUser(TEST_USER, 'Tess', { approved: true });
+  return server;
+}
+
+/** A device signed in as the test player. Each call without a server gets an account of its own. */
+export const testRemote = (server: MemoryServer = testServer()): MemoryRemote => server.remote({ userId: TEST_USER });
+
+/**
+ * A fresh store on in-memory storage, signed in as the test player and holding one imported
+ * fixture, which is opened.
+ */
+export async function seed(
+  slug: Slug, storage: AppStorage = memoryStorage(), remote: Remote = testRemote(),
+): Promise<StoredCharacter> {
+  await useStore.getState().init(storage, remote);
   const record = await useStore.getState().saveImported(loadRaw(slug));
   if (!record) throw new Error(`fixture ${slug} did not import`);
   await useStore.getState().open(record.id);

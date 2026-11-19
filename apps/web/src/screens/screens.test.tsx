@@ -5,7 +5,7 @@ import { loadRaw } from '../../../../test-utils/fixtures';
 import { ErrorBoundary } from '../App';
 import { memoryStorage, type AppStorage } from '../storage';
 import { useStore } from '../store';
-import { seed } from '../test/helpers';
+import { seed, testRemote } from '../test/helpers';
 import { renderAt } from '../test/render';
 
 const json = (status: number, body: unknown) =>
@@ -18,7 +18,7 @@ const stubFetch = (response: () => Response | Promise<Response>) => {
 };
 
 async function emptyApp(storage: AppStorage = memoryStorage()) {
-  await useStore.getState().init(storage);
+  await useStore.getState().init(storage, testRemote());
 }
 
 describe('Home screen', () => {
