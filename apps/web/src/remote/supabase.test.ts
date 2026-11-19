@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DEV_USER, defaultRemote, hasAccount } from './index';
-import { supabaseRemote } from './supabase';
+import { CALL_LIMIT_MS, CHARACTER_PAGE, ITEM_PAGE, supabaseRemote } from './supabase';
 
 const ENV = { VITE_SUPABASE_URL: 'https://abc.supabase.co', VITE_SUPABASE_KEY: 'sb_publishable_test' };
 
@@ -16,7 +16,7 @@ interface AuthProblem { message?: string; status?: number }
  */
 function fakeClient(session: { userId: string; token: string } | null = { userId: 'user-ann', token: 'user-token' }) {
   const calls: string[] = [];
-  const answers: Answer[] = [];
+  const answers: (Answer | 'stall')[] = [];
   let authListener: (event: string, session: unknown) => void = () => undefined;
   const sessionData = () => ({
     data: { session: session ? { user: { id: session.userId }, access_token: session.token } : null }, error: null,
@@ -26,13 +26,16 @@ function fakeClient(session: { userId: string; token: string } | null = { userId
     const next = (...more: unknown[]) => builder([...parts, ...more.map(String)]);
     const settle = (): Promise<Answer> => {
       calls.push(parts.join(' '));
-      return Promise.resolve(answers.shift() ?? { data: null, error: null, status: 200 });
+      const next = answers.shift();
+      if (next === 'stall') return new Promise<Answer>(() => undefined);
+      return Promise.resolve(next ?? { data: null, error: null, status: 200 });
     };
     return {
       select: (columns: string) => next('select', columns),
       eq: (column: string, value: unknown) => next('eq', column, value),
       gt: (column: string, value: unknown) => next('gt', column, value),
       order: (column: string) => next('order', column),
+      limit: (count: number) => next('limit', count),
       maybeSingle: () => next('maybeSingle'),
       then: (resolve: (answer: Answer) => unknown, reject?: (reason: unknown) => unknown) => settle().then(resolve, reject),
     };
@@ -59,6 +62,7 @@ function fakeClient(session: { userId: string; token: string } | null = { userId
     auth,
     calls,
     answer: (data: unknown, status = 200) => answers.push({ data, error: null, status }),
+    stall: () => answers.push('stall'),
     fail: (error: { code?: string; message?: string }, status?: number) => answers.push({ data: null, error, status }),
     emit: (userId: string | null) => authListener('TOKEN_REFRESHED', userId ? { user: { id: userId } } : null),
   };
@@ -72,6 +76,7 @@ async function started(fake = fakeClient()) {
 }
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 
@@ -196,9 +201,44 @@ describe('supabaseRemote: data', () => {
       characterId: 'c1', kind: 'edit', key: 'k', data: { hidden: true }, updatedAt: '2026-01-02T10:00:00.000Z', deleted: false, rev: 8,
     }]);
     expect(fake.calls).toEqual([
-      'from characters select * gt rev 5 order rev',
-      'from character_items select * gt rev 5 order rev',
+      'from characters select * gt rev 5 order rev limit 5',
+      'from character_items select * gt rev 5 order rev limit 500',
     ]);
+  });
+
+  /** A character row as the table returns it, for paging tests. */
+  const characterRow = (rev: number) => ({
+    id: `c${rev}`, owner_id: 'user-ann', ddb_character_id: String(rev), name: `Name ${rev}`, raw_json: { data: rev },
+    imported_at: '2026-01-01T10:00:00+00:00', updated_at: '2026-01-02T10:00:00+00:00', deleted: false, rev,
+  });
+
+  it('asks for the next page while a full page came back', async () => {
+    const { fake, remote } = await started();
+    fake.answer([1, 2, 3, 4, 5].map(characterRow));
+    fake.answer([6, 7].map(characterRow));
+    expect((await remote.pullCharacters(0)).map((c) => c.rev)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+    expect(fake.calls).toEqual([
+      `from characters select * gt rev 0 order rev limit ${CHARACTER_PAGE}`,
+      `from characters select * gt rev 5 order rev limit ${CHARACTER_PAGE}`,
+    ]);
+    expect(ITEM_PAGE).toBe(500);
+  });
+
+  it('returns what arrived when a later page fails, so the next fetch continues from there', async () => {
+    const { fake, remote } = await started();
+    fake.answer([1, 2, 3, 4, 5].map(characterRow));
+    fake.fail({ message: 'TypeError: Failed to fetch' }, 0);
+    expect((await remote.pullCharacters(0)).map((c) => c.rev)).toEqual([1, 2, 3, 4, 5]);
+  });
+
+  it('gives up on a call that gets no answer, as it would with no connection', async () => {
+    vi.useFakeTimers();
+    const { fake, remote } = await started();
+    fake.stall();
+    const promise = remote.pullItems(0);
+    const outcome = expect(promise).rejects.toMatchObject({ name: 'RemoteError', kind: 'offline' });
+    await vi.advanceTimersByTimeAsync(CALL_LIMIT_MS);
+    await outcome;
   });
 });
 

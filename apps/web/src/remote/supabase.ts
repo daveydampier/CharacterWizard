@@ -23,19 +23,77 @@ function failure(answer: Answer): RemoteError {
   return remoteErrorFrom({ code: answer.error?.code, status: answer.status, message });
 }
 
-/** The data of an answer; rejects with a RemoteError if the call failed or could not be made. */
+/** How long a data call may go without an answer before it counts as no connection. */
+export const CALL_LIMIT_MS = 20_000;
+/** How long start-up waits to learn who is signed in before it carries on without knowing. */
+export const START_LIMIT_MS = 8_000;
+/** How many rows one request asks for. A character row carries a whole sheet. */
+export const CHARACTER_PAGE = 5;
+export const ITEM_PAGE = 500;
+/** The most requests one fetch makes of a table. The next sync continues from where it stopped. */
+const MAX_PAGES = 20;
+
+const timedOut = Symbol('timed out');
+
+/** The call's own result, or `timedOut` if it has not settled within `ms`. The call is left to end on its own. */
+function within<T>(call: PromiseLike<T>, ms: number): Promise<T | typeof timedOut> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => resolve(timedOut), ms);
+    Promise.resolve(call).then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
+/**
+ * The data of an answer; rejects with a RemoteError if the call failed, could not be made, or
+ * got no answer in time. Without the limit one stalled request would hold up every later sync.
+ */
 async function unwrap(call: PromiseLike<Answer>): Promise<unknown> {
-  let answer: Answer;
+  let answer: Answer | typeof timedOut;
   try {
-    answer = await call;
+    answer = await within(call, CALL_LIMIT_MS);
   } catch (error) {
     throw new RemoteError('offline', error instanceof Error ? error.message : String(error));
   }
+  if (answer === timedOut) throw new RemoteError('offline', 'no answer in time');
   if (answer.error) throw failure(answer);
   return answer.data;
 }
 
 const rows = (data: unknown): Row[] => (Array.isArray(data) ? (data as Row[]) : []);
+
+/**
+ * Every row after `afterRev`, asked for a page at a time. If a page fails after an earlier one
+ * arrived, what arrived is returned: it is in rev order, so the caller's cursor moves to its
+ * last row and the next fetch continues from there.
+ */
+async function paged(afterRev: number, size: number, page: (after: number) => PromiseLike<Answer>): Promise<Row[]> {
+  const all: Row[] = [];
+  let after = afterRev;
+  for (let n = 0; n < MAX_PAGES; n += 1) {
+    let got: Row[];
+    try {
+      got = rows(await unwrap(page(after)));
+    } catch (error) {
+      if (all.length > 0) break;
+      throw error;
+    }
+    all.push(...got);
+    if (got.length < size) break;
+    const last = Number(got[got.length - 1].rev);
+    if (!Number.isFinite(last) || last <= after) break;
+    after = last;
+  }
+  return all;
+}
 
 /**
  * The account, on Supabase. Sign-in is by Discord; data goes through the tables and functions of
@@ -111,12 +169,16 @@ export function supabaseRemote(client: SupabaseClient, env: ImportEnv): Remote {
 
     async pullCharacters(afterRev) {
       me();
-      return rows(await unwrap(client.from('characters').select('*').gt('rev', afterRev).order('rev'))).map(characterFromRow);
+      const data = await paged(afterRev, CHARACTER_PAGE, (after) =>
+        client.from('characters').select('*').gt('rev', after).order('rev').limit(CHARACTER_PAGE));
+      return data.map(characterFromRow);
     },
 
     async pullItems(afterRev) {
       me();
-      return rows(await unwrap(client.from('character_items').select('*').gt('rev', afterRev).order('rev'))).map(itemFromRow);
+      const data = await paged(afterRev, ITEM_PAGE, (after) =>
+        client.from('character_items').select('*').gt('rev', after).order('rev').limit(ITEM_PAGE));
+      return data.map(itemFromRow);
     },
 
     async importCharacter(ddbId) {
