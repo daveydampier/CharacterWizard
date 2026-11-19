@@ -203,6 +203,13 @@ declare
   v_id text;
   rejected jsonb := '[]'::jsonb;
 begin
+  -- Checked before the lock, so that an account that is not approved cannot hold up the writers
+  -- that are. Its rows come back as refused, as row-level security would refuse each of them.
+  if not public.is_approved() then
+    return coalesce(
+      (select jsonb_agg(jsonb_build_object('id', e ->> 'id', 'reason', 'refused')) from jsonb_array_elements(rows) e),
+      '[]'::jsonb);
+  end if;
   -- Taken before any row is locked, so that every writer queues in the same order. Without it,
   -- two devices writing the same rows can deadlock, and two devices of one player can both
   -- pass the ten-character count.
@@ -249,10 +256,14 @@ language plpgsql security invoker set search_path = '' as $$
 declare
   r jsonb;
 begin
+  -- Checked before the lock, for the same reason as in push_characters.
+  if not public.is_approved() then
+    return;
+  end if;
   -- The same lock, taken first for the same reason as in push_characters.
   perform pg_advisory_xact_lock(4242);
   for r in select * from jsonb_array_elements(rows) loop
-    if not public.is_approved() or not exists (
+    if not exists (
       select 1 from public.characters c where c.id = r ->> 'character_id' and not c.deleted
     ) then
       continue;

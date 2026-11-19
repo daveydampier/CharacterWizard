@@ -208,14 +208,18 @@ describe('the database, beyond the shared rules', () => {
     expect(await b.as(ANN).pullCharacters(0)).toEqual([]);
   });
 
-  it('takes the write lock in both push functions before it touches any row', async () => {
+  // This reads the functions' source text, not their behaviour: PGlite has one connection, so
+  // nothing here can make two writers wait for each other.
+  it('checks the caller, then takes the write lock, then touches rows, in both push functions', async () => {
     const rows = (await db.query<{ proname: string; prosrc: string }>(
       `select proname, prosrc from pg_proc where proname in ('push_characters', 'push_items') order by proname`,
     )).rows;
     expect(rows.map((r) => r.proname)).toEqual(['push_characters', 'push_items']);
     for (const { prosrc } of rows) {
+      const check = prosrc.indexOf('is_approved()');
       const lock = prosrc.indexOf('pg_advisory_xact_lock(4242)');
-      expect(lock).toBeGreaterThan(-1);
+      expect(check).toBeGreaterThan(-1);
+      expect(lock).toBeGreaterThan(check);
       expect(lock).toBeLessThan(prosrc.indexOf('for r in'));
     }
   });
