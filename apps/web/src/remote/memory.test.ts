@@ -78,4 +78,15 @@ describe('memoryServer', () => {
     server.offline = true;
     expect(await server.remote({ userId: ANN }).importCharacter('42')).toEqual({ status: 'unreachable' });
   });
+
+  it('answers unreachable when the importer itself fails', async () => {
+    const server = memoryServer({
+      importer: async () => {
+        throw new Error('network down');
+      },
+    });
+    server.addUser(ANN, 'Ann', { approved: true });
+    const remote = server.remote({ userId: ANN });
+    expect(await remote.importCharacter('42')).toEqual({ status: 'unreachable' });
+  });
 });

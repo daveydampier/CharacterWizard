@@ -189,7 +189,12 @@ export function memoryServer(options: MemoryServerOptions = {}): MemoryServer {
             return { status: error instanceof RemoteError && error.kind === 'unauthorized' ? 'unauthorized' : 'unreachable' };
           }
           if (allowed !== 'ok') return { status: allowed };
-          return options.importer ? options.importer(ddbId) : { status: 'unreachable' };
+          if (!options.importer) return { status: 'unreachable' };
+          try {
+            return await options.importer(ddbId);
+          } catch {
+            return { status: 'unreachable' };
+          }
         },
       };
     },
