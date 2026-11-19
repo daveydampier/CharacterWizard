@@ -351,6 +351,56 @@ describe('first sign-in on a device', () => {
     expect(await storage.listCharacters()).toEqual([character('ddb-42-user-ann', { dirty: false })]);
   });
 
+  it('keeps the later record of each kind when the device already holds the character under that ID', async () => {
+    const storage = memoryStorage();
+    const id = 'ddb-42-user-ann';
+    await storage.putCharacter(character(id, { name: 'Account copy', dirty: false }));
+    await storage.putItem(item(id, 'play', 'state', { data: { from: 'account' }, updatedAt: T3, dirty: false }));
+    await storage.putItem(item(id, 'edit', 'spell:1', { data: { from: 'account' }, updatedAt: T1, dirty: false }));
+    await storage.putCharacter(ownerless('local-1', '42', { name: 'Device copy', importedAt: T2, updatedAt: T2 }));
+    await storage.putItem(item('local-1', 'play', 'state', { data: { from: 'device' }, updatedAt: T1 }));
+    await storage.putItem(item('local-1', 'edit', 'spell:1', { data: { from: 'device' }, updatedAt: T2 }));
+    await storage.putItem(item('local-1', 'custom', 'own:1', { data: { from: 'device' }, updatedAt: T1 }));
+    await storage.putItem(item('local-1', 'turn', 'state', { data: { from: 'device' }, updatedAt: T1, dirty: false }));
+
+    await claimLocalCharacters(storage, ANN);
+
+    expect(await storage.listCharacters()).toEqual([
+      { ...ownerless('local-1', '42', { name: 'Device copy', importedAt: T2, updatedAt: T2 }), id, ownerId: ANN, dirty: true },
+    ]);
+    expect(await storage.listItems('local-1')).toEqual([]);
+    const kept = new Map((await storage.listItems(id)).map((i) => [`${i.kind}|${i.key}`, [i.data, i.dirty]]));
+    expect(kept.get('play|state')).toEqual([{ from: 'account' }, false]);
+    expect(kept.get('edit|spell:1')).toEqual([{ from: 'device' }, true]);
+    expect(kept.get('custom|own:1')).toEqual([{ from: 'device' }, true]);
+    expect(kept.get('turn|state')).toEqual([{ from: 'device' }, false]);
+    expect(kept.size).toBe(4);
+  });
+
+  it('keeps the character the device already holds when that copy is the later one', async () => {
+    const storage = memoryStorage();
+    const id = 'ddb-42-user-ann';
+    await storage.putCharacter(character(id, { name: 'Account copy', importedAt: T3, updatedAt: T3, dirty: false }));
+    await storage.putCharacter(ownerless('local-1', '42', { name: 'Device copy', importedAt: T2, updatedAt: T2 }));
+    await claimLocalCharacters(storage, ANN);
+    expect(await storage.listCharacters()).toEqual([
+      character(id, { name: 'Account copy', importedAt: T3, updatedAt: T3, dirty: false }),
+    ]);
+  });
+
+  it('claims two ownerless copies of one character into one, keeping the later', async () => {
+    const storage = memoryStorage();
+    await storage.putCharacter(ownerless('local-1', '42', { name: 'Older copy' }));
+    await storage.putItem(item('local-1', 'edit', 'spell:1', { data: { from: 'older' } }));
+    await storage.putCharacter(ownerless('local-2', '42', { name: 'Newer copy', importedAt: T2, updatedAt: T2 }));
+    await storage.putItem(item('local-2', 'play', 'state', { data: { from: 'newer' } }));
+    await claimLocalCharacters(storage, ANN);
+    const all = await storage.listCharacters();
+    expect(all.map((c) => [c.id, c.name, c.ownerId, c.dirty])).toEqual([['ddb-42-user-ann', 'Newer copy', ANN, true]]);
+    expect((await storage.listItems('ddb-42-user-ann')).map((i) => i.kind).sort()).toEqual(['edit', 'play']);
+    expect(await storage.listItems()).toHaveLength(2);
+  });
+
   it('uploads them, and where the account already has the character keeps the newer import and the later play state', async () => {
     const server = table();
     const tablet = device(server, ANN);

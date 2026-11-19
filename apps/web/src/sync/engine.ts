@@ -45,17 +45,34 @@ export async function resetCursors(storage: AppStorage): Promise<void> {
  * First sign-in on a device: characters imported before accounts existed have no owner. Each is
  * given the signed-in user and the ID an import by that user would have, and is marked dirty so
  * that it uploads. Its items move with it.
+ *
+ * If the device already holds a character under that ID, the two are merged the way everything
+ * else is: record by record, the later change wins, and nothing that is only on one side is lost.
  */
 export async function claimLocalCharacters(storage: AppStorage, userId: string): Promise<void> {
   const all = await storage.listCharacters();
+  const held = new Map(all.filter((c) => c.ownerId !== null).map((c) => [c.id, c]));
   for (const character of all.filter((c) => c.ownerId === null)) {
     const id = character.ddbId === '0' ? character.id : characterId(character.ddbId, userId);
-    if (id !== character.id && all.some((c) => c.id === id)) {
-      // The account's copy of this character is already here: the ownerless one gives way.
-      await storage.removeCharacter(character.id);
+    const claimed: StoredCharacter = { ...character, id, ownerId: userId, dirty: true };
+    const existing = held.get(id);
+    if (!existing) {
+      await storage.rekeyCharacter(character.id, claimed);
+      held.set(id, claimed);
       continue;
     }
-    await storage.rekeyCharacter(character.id, { ...character, id, ownerId: userId, dirty: true });
+    const theirs = await storage.listItems(id);
+    for (const item of await storage.listItems(character.id)) {
+      const other = theirs.find((i) => i.kind === item.kind && i.key === item.key);
+      if (other && !later(item.updatedAt, other.updatedAt)) continue;
+      // A synced item that moves must be sent; the turn never is.
+      await storage.putItem({ ...item, characterId: id, dirty: isSynced(item.kind) ? true : item.dirty });
+    }
+    await storage.removeCharacter(character.id);
+    if (later(character.updatedAt, existing.updatedAt)) {
+      await storage.putCharacter(claimed);
+      held.set(id, claimed);
+    }
   }
 }
 
