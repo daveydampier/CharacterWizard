@@ -224,3 +224,18 @@ describe('the database, beyond the shared rules', () => {
     }
   });
 });
+
+describe('the database script, applied where somebody has already signed in', () => {
+  it('gives them a profile: named as on Discord, not approved, not an admin', async () => {
+    const early = '00000000-0000-4000-8000-0000000000e1';
+    const db = await openDatabase(
+      `insert into auth.users (id, raw_user_meta_data) values ('${early}', '{"full_name": "Early"}')`,
+    );
+    try {
+      const { rows } = await db.query('select display_name, approved, is_table_admin from public.profiles where id = $1', [early]);
+      expect(rows).toEqual([{ display_name: 'Early', approved: false, is_table_admin: false }]);
+    } finally {
+      await db.close();
+    }
+  });
+});

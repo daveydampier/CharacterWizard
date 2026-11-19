@@ -28,10 +28,14 @@ const SUPABASE_STAND_IN = `
   grant usage on schema public to anon, authenticated;
 `;
 
-/** A fresh in-process Postgres with the stand-in and every migration applied, in file-name order. */
-export async function openDatabase(): Promise<PGlite> {
+/**
+ * A fresh in-process Postgres with the stand-in and every migration applied, in file-name order.
+ * `beforeMigrations` is SQL run after the stand-in and before the migrations.
+ */
+export async function openDatabase(beforeMigrations?: string): Promise<PGlite> {
   const db = new PGlite();
   await db.exec(SUPABASE_STAND_IN);
+  if (beforeMigrations) await db.exec(beforeMigrations);
   for (const file of readdirSync(migrations).filter((name) => name.endsWith('.sql')).sort()) {
     await db.exec(readFileSync(join(migrations, file), 'utf8'));
   }

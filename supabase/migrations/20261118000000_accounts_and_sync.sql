@@ -87,6 +87,17 @@ $$;
 create trigger on_auth_user_created after insert on auth.users
   for each row execute function public.handle_new_user();
 
+-- Anyone who signed in before this script was applied has no profile yet. Give them one now,
+-- exactly as the trigger would have.
+insert into public.profiles (id, display_name)
+select u.id, coalesce(
+  nullif(u.raw_user_meta_data -> 'custom_claims' ->> 'global_name', ''),
+  nullif(u.raw_user_meta_data ->> 'full_name', ''),
+  nullif(u.raw_user_meta_data ->> 'name', ''),
+  'Player')
+from auth.users u
+on conflict (id) do nothing;
+
 -- ---------------------------------------------------------------------------------------------
 -- Write ordering: the later change wins, and every accepted write gets the next rev
 -- ---------------------------------------------------------------------------------------------
