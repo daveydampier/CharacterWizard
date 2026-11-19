@@ -4,6 +4,8 @@ import { AboutScreen } from './screens/About';
 import { CharacterScreen } from './screens/Character';
 import { HomeScreen } from './screens/Home';
 import { ImportScreen } from './screens/Import';
+import { SignInScreen } from './screens/SignIn';
+import { WaitingScreen } from './screens/Waiting';
 import { useStore } from './store';
 
 /** Catches a crash in any screen. Stored characters and play state are not touched. */
@@ -54,11 +56,15 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, { failed: 
   }
 }
 
+/** About is open to everyone. Every other screen needs a signed-in, approved player. */
 function Screen() {
   const route = useRoute();
+  const session = useStore((s) => s.session);
+  if (route.name === 'about') return <AboutScreen />;
+  if (!session) return <SignInScreen />;
+  if (!session.profile?.approved) return <WaitingScreen />;
   switch (route.name) {
     case 'import': return <ImportScreen />;
-    case 'about': return <AboutScreen />;
     case 'character': return <CharacterScreen id={route.id} view={route.view} />;
     default: return <HomeScreen />;
   }

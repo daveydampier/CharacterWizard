@@ -275,10 +275,12 @@ describe('App', () => {
     consoleError.mockRestore();
   });
 
-  it('loads stored characters by itself on a fresh start', async () => {
-    useStore.setState({ ready: false, characters: [] });
+  it('loads the device and the account by itself on a fresh start, and asks for sign-in', async () => {
+    useStore.setState({ ready: false, session: null, characters: [] });
     renderAt({ name: 'home' });
     expect(screen.getByText('Loading…')).toBeInTheDocument();
+    // No Supabase project is configured under test, so the app chooses the local stand-in account.
+    await userEvent.click(await screen.findByRole('button', { name: 'Continue as test player' }));
     expect(await screen.findByText('Add your first character')).toBeInTheDocument();
     expect(useStore.getState().persistent).toBe(true);
   });

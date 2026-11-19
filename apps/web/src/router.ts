@@ -6,15 +6,27 @@ export type Route =
   | { name: 'home' }
   | { name: 'import' }
   | { name: 'about' }
+  | { name: 'players' }
   | { name: 'character'; id: string; view: View };
+
+/** A percent-encoded part of the address, decoded. Null when it is not validly encoded. */
+function decoded(part: string): string | null {
+  try {
+    return decodeURIComponent(part);
+  } catch {
+    return null;
+  }
+}
 
 /** "#/c/<id>/explore" and friends. Anything unrecognised is the home screen. */
 export function parseRoute(hash: string): Route {
   const parts = hash.replace(/^#/, '').split('/').filter((part) => part !== '');
   if (parts[0] === 'import' && parts.length === 1) return { name: 'import' };
   if (parts[0] === 'about' && parts.length === 1) return { name: 'about' };
+  if (parts[0] === 'players' && parts.length === 1) return { name: 'players' };
   if (parts[0] === 'c' && parts[1]) {
-    return { name: 'character', id: parts[1], view: parts[2] === 'explore' ? 'explore' : 'combat' };
+    const id = decoded(parts[1]);
+    if (id !== null) return { name: 'character', id, view: parts[2] === 'explore' ? 'explore' : 'combat' };
   }
   return { name: 'home' };
 }
@@ -23,7 +35,9 @@ export function routeHref(route: Route): string {
   switch (route.name) {
     case 'import': return '#/import';
     case 'about': return '#/about';
-    case 'character': return `#/c/${route.id}/${route.view}`;
+    case 'players': return '#/players';
+    // Encoded, so that an ID containing "/" or "%" stays one part of the address.
+    case 'character': return `#/c/${encodeURIComponent(route.id)}/${route.view}`;
     default: return '#/';
   }
 }
