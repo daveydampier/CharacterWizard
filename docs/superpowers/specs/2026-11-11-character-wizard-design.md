@@ -206,7 +206,7 @@ Curated entries are matched to imported features by D&D Beyond's definition ID w
 
 One table holds every kind, so syncing, conflict handling and the access rule are each written once. The database does not check the shape of `data`; the app checks and repairs every item when it reads it (section 5.3).
 
-**Sync columns:** `updated_at` is when the change was made, by the clock of the device that made it. A trigger on both tables caps it at the server's time, silently skips a write that is not newer than the row it would replace, and stamps `rev` from one sequence. The stamp is taken under an advisory lock, so `rev` order is commit order and a device can fetch "everything after the last `rev` I saw" without missing a row. The two database functions that write take the same lock before they touch any row, so that writers queue in one order, and they report as refused only what would be refused again.
+**Sync columns:** `updated_at` is when the change was made, by the clock of the device that made it. A trigger on both tables caps it at the server's time, silently skips a write that is not newer than the row it would replace, and stamps `rev` from one sequence. The stamp is taken under an advisory lock, so `rev` order is commit order and a device can fetch "everything after the last `rev` I saw" without missing a row. The two database functions that write take the same lock before they touch any row, so that writers queue in one order, and they report as refused only what would be refused again. They check that the caller is approved before they take it.
 
 **Deleting** sets `deleted`. A deleted character keeps its row with `raw_json` null and loses its items; a deleted item keeps its row with `data` null. Every device learns of the deletion at its next fetch.
 
@@ -495,7 +495,7 @@ Hide, order and edit work on any row, including the universal actions. The unive
 
 - Sign-in is by Discord, through Supabase Auth. The app sends no email and stores no password. Sign-in returns to the site with a `code` in the query string, which does not collide with the hash routes.
 - Sign-in is required. A device with nobody signed in shows only the sign-in screen and About.
-- The device remembers who is signed in (section 5.3), so the app opens from the device's copy without a connection. If the session can no longer be renewed, the app keeps working from the device and shows "Sign in again to sync".
+- The device remembers who is signed in (section 5.3), so the app opens from the device's copy without a connection. If the session can no longer be renewed, the app keeps working from the device and shows "Sign in again to sync". Having no connection when the app opens is not a session that has ended: the app says the changes are waiting, and syncs when the connection returns.
 - **Signing out** removes the device's copy of every character. If changes are still waiting to sync, the app says so and asks before discarding them.
 - Signing out waits for a sync that is running, so that nothing it fetched is left on the device.
 - If a different account signs in on a device whose earlier session had ended, the earlier account's copy is removed from the device, including any changes it had not yet sent. The device cannot send them without that account's session.
@@ -532,7 +532,7 @@ Hide, order and edit work on any row, including the universal actions. The unive
 
 - Every change is saved on the device first, marked dirty, and sent to the account in the background.
 - **Sending:** about two seconds after a change, and again when a connection returns. A record stops being dirty once the account has answered, whether it accepted the change or already held a newer one.
-- **Fetching:** at sign-in, when the app opens, when the player switches back to it, and every 30 seconds while it is on screen. The device asks for every character and item with a `rev` after the last one it saw.
+- **Fetching:** at sign-in, when the app opens, when the player switches back to it, and every 30 seconds while it is on screen. The device asks for every character and item with a `rev` after the last one it saw. The account answers a page at a time, and a call that gets no answer within 20 seconds counts as no connection.
 - **Merging a fetched record:** it replaces the device's copy unless the device's copy is dirty and newer. If the character on screen changed, the screen updates. A change the player makes to what is spent while a fetch is running, or while its result is being read back, wins over what was fetched; a change to the turn alone does not count, because the turn never syncs.
 - **What syncs:** characters, and the `play`, `edit`, `custom` and `order` items. Turn state does not.
 - **First sign-in on a device:** characters already on it are uploaded (section 5.3). Where the account already has the same character, the ordinary rule decides each record: the newer import, and whichever play state changed last. Where the device itself already holds the character under the account's ID, the two copies are merged the same way, record by record.
