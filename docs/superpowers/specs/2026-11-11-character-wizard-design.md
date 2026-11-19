@@ -416,7 +416,7 @@ Both views are phone first. Each is one scrolling page.
 - Suggested turn card with reason and thumbs up or down; swipe for the next plan (milestone 4).
 - Abilities grouped by Action, Bonus Action, Reaction, "No action needed" (timing `free`, for example Action Surge; collapsed) and "Other" (timing `unknown`; shown only when not empty). Abilities that take a minute or more are not listed. Each row has the name, a cost label, tags, a plain-English roll line and a Use button. An edited row also carries the label "edited".
 - A group whose timing is spent dims but stays visible.
-- Two rows with the same name are told apart by their cost label ("free cast, 3 left" and "pact slot"). The cost label is part of each row's accessible name and of its Use button's.
+- Two rows with the same name are told apart by their cost label ("free cast, 3 left" and "pact slot"). Where two rows on a sheet share a name, the kind of cost ("free cast", "pact slot") is also part of each row's accessible name and of its buttons', so a screen reader can tell them apart.
 - A weapon with a charge pool shows the pool as pips on its row.
 - The Action group states the number of attacks when it is more than one. Using any weapon spends the Action once; attacks within the Action are not counted.
 - A collapsed "Anyone can do this" group for the universal actions. They use the normal row, so Use on Dash spends the Action.
@@ -451,7 +451,7 @@ Both views are phone first. Each is one scrolling page.
 ### 10.3 Shared behaviour
 
 - Tapping a row opens the full description. Descriptions are HTML from the import and are sanitised to a small set of formatting tags before display.
-- Dialogs (the slot choice, the ability editor, confirmations) are `<dialog>` elements: focus moves into them, stays inside them, and Escape closes them.
+- Dialogs (the slot choice and the editors) are `<dialog>` elements: focus moves into them, stays inside them, and Escape closes them. A yes-or-no question (delete, sign out with unsynced changes) uses the browser's own confirm box.
 
 ### 10.4 Editing and arranging (milestone 3)
 
@@ -464,13 +464,13 @@ Playing and arranging are separate, so that nobody moves or edits a row by accid
 - Timing: Action, Bonus Action, Reaction, No action needed, Takes a minute or more, Passive.
 - Limited uses: off, or a maximum and a reset (Short Rest, Long Rest, never). Not shown for an ability that costs a spell slot.
 - Tags: the nine tags as toggles.
-- Shown in: Combat and Explore tick boxes, starting from where the app put the ability.
+- Shown in: Combat and Explore tick boxes, starting from where the app put the ability. A box the player has not set keeps following the app's rule as they change the timing and tags, so giving an ability the Utility tag ticks Explore by itself.
 - Roll: none, an attack (bonus and damage), a save (ability, DC and damage), damage only, or dice only. Numbers are typed in.
 - Hide, and "Back to imported", which removes every edit to that ability.
 
 **"Edit list"** is a button at the bottom of each view. It switches the view into arranging:
 
-- Each row shows a drag handle and no Use button.
+- Each row shows a drag handle, "Move up" and "Move down" buttons, Edit and Hide, and no Use button. The two buttons do what dragging does, so arranging never requires a drag.
 - Dragging moves a row within its own group. Moving an ability to another group is done by changing its timing in the editor.
 - Combat and Explore each keep their own order. The first drag in a group fixes that group's order as shown; an ability that arrives later goes to the end of its group.
 - A "Hidden" drawer lists hidden abilities, each with Restore.
@@ -482,8 +482,8 @@ Hide, order and edit work on any row, including the universal actions. The unive
 ### 10.5 Other screens
 
 - **Sign in:** one button, "Continue with Discord", and the link to About. Shown whenever nobody is signed in on the device.
-- **Waiting for approval:** shown to a signed-in player who is not approved. It names the account, and has "Check again" and "Sign out".
-- **Character list** (home): the player's characters with class, level and import date; add, re-import and delete. Deleting says that the character is removed from the account and from every device. A table admin also sees a "Table" section listing every other character with its owner's name. One line shows the sync state: "Saved to your account", "Waiting to sync" or "Sign in again to sync". The screen has "Sign out", and for a table admin a link to Players.
+- **Waiting for approval:** shown to a signed-in player who is not approved. It names the account, and has "Check again" and "Sign out". After "Check again" it says "Still waiting." if nothing has changed. Until the account has said who the player is, the same screen reads "Checking your account" with "Try again". "Sign out" asks first if the device holds anything the account has not been sent.
+- **Character list** (home): the player's characters with class, level and import date; add, re-import and delete. Deleting says that the character is removed from the account and from every device. A table admin also sees a "Table" section listing every other character with its owner's name. One line shows the sync state: "Saved to your account", "Waiting to sync", "Sign in again to sync" (with a "Sign in" button), or "Your account has ten characters. Delete one so the rest can sync." The screen has "Sign out", which asks before discarding changes that have not synced, and for a table admin a link to Players. A character whose sheet cannot be built still has a card, so that it can be re-imported or deleted.
 - **Players** (table admin only): the people waiting, each with Approve, and the approved players, each with Remove access. An admin cannot remove their own access.
 - **Import:** see section 6.
 - **About:** the attribution and statement in section 13.
@@ -502,6 +502,7 @@ Hide, order and edit work on any row, including the universal actions. The unive
 
 - A first sign-in creates a profile that is not approved. An unapproved player sees only the waiting screen.
 - A table admin approves players, and removes access, on the Players screen. Removing access keeps the player's characters.
+- A player who stops being a table admin loses the other players' characters from their device at the next sync.
 - The first admin is made by hand: the owner signs in once, then marks their own profile approved and admin with one SQL statement in the Supabase dashboard. Nothing in the app can grant admin.
 
 **Row-level security** is on for every table.
