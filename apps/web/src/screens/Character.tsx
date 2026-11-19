@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { routeHref, type View } from '../router';
 import { useStore } from '../store';
 import { CombatView } from '../views/CombatView';
@@ -14,12 +14,23 @@ export function CharacterScreen({ id, view }: { id: string; view: View }) {
   const known = useStore((s) => s.characters.some((c) => c.id === id));
   const openId = useStore((s) => s.openId);
   const sheet = useStore((s) => s.sheet);
+  const loaded = useStore((s) => s.loaded);
   const undo = useStore((s) => s.undo);
   const undoLast = useStore((s) => s.undoLast);
   const startTurn = useStore((s) => s.startTurn);
 
+  /** The character that `open` has finished with and left closed, although it is on this device. */
+  const [failedId, setFailedId] = useState<string | null>(null);
+
   useEffect(() => {
-    void open(id);
+    let current = true;
+    const settled = (): void => {
+      if (current) setFailedId(useStore.getState().openId === id ? null : id);
+    };
+    void open(id).then(settled, settled);
+    return () => {
+      current = false;
+    };
   }, [id, open]);
 
   if (!known) {
@@ -30,7 +41,16 @@ export function CharacterScreen({ id, view }: { id: string; view: View }) {
       </main>
     );
   }
-  if (openId !== id || !sheet) return <main className="mx-auto max-w-md p-4 text-slate-600">Loading…</main>;
+  if (failedId === id) {
+    return (
+      <main className="mx-auto max-w-md p-4">
+        <p className="font-medium">This character couldn't be opened.</p>
+        <a href={routeHref({ name: 'home' })} className="mt-2 inline-flex min-h-11 items-center text-indigo-700">Back to your characters</a>
+      </main>
+    );
+  }
+  // Nothing can be tapped until the saved play state has been read, so nothing is shown until then.
+  if (openId !== id || !sheet || !loaded) return <main className="mx-auto max-w-md p-4 text-slate-600">Loading…</main>;
 
   return (
     <main className="mx-auto max-w-md px-4 pb-[calc(10rem+env(safe-area-inset-bottom))] pt-3">

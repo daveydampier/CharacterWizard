@@ -27,7 +27,13 @@ function CharacterCard({ character, detail }: { character: StoredCharacter; deta
   const remove = useStore((s) => s.remove);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const sheet = sheetFor(character);
+  // A record whose sheet cannot be built still gets a card, so that it can be re-imported or deleted.
+  let classLine = '';
+  try {
+    classLine = sheetFor(character).classLine;
+  } catch {
+    classLine = '';
+  }
 
   async function reimport(): Promise<void> {
     setBusy(true);
@@ -53,7 +59,7 @@ function CharacterCard({ character, detail }: { character: StoredCharacter; deta
       <a href={routeHref({ name: 'character', id: character.id, view: 'combat' })} className="block">
         <span className="block text-lg font-medium">{character.name}</span>
         <span className="block text-sm text-slate-600">
-          {[sheet.classLine, detail].filter((part) => part.trim() !== '').join(' · ')}
+          {[classLine, detail].filter((part) => part.trim() !== '').join(' · ')}
         </span>
       </a>
       <div className="mt-2 flex gap-3 text-sm">
