@@ -1,4 +1,5 @@
 import type { ActionDice, ActionEntry } from '@cw/model';
+import { numberDuplicates, textHash } from './keys';
 import {
   abilityFromStatId, arr, limitedUseFrom, num, obj, str, timingFromActivation, type Raw,
 } from './raw';
@@ -13,9 +14,15 @@ function dice(count: unknown, sides: unknown, fixed: unknown): ActionDice | null
   return { count: c, sides: s, fixed: num(fixed) ?? 0 };
 }
 
-/** The id, else the name, else the entry's position in its group so that unnamed entries stay apart. */
-const keyId = (a: Raw, group: string, index: number): string | number =>
-  str(a.id) || num(a.id) || str(a.name) || `${group}-${index}`;
+/**
+ * The id, else the name, else a hash of what the entry says. An entry with neither an id nor a
+ * name keeps its key when D&D Beyond reorders the list, which a position would not.
+ */
+const keyId = (a: Raw): string | number =>
+  str(a.id) ||
+  num(a.id) ||
+  str(a.name) ||
+  `anon-${textHash(`${str(a.snippet)}|${str(a.description)}|${obj(a.activation).activationType ?? a.activationType ?? ''}`)}`;
 
 function fromGroup(a: Raw, source: GroupSource, key: string | number): ActionEntry {
   const ability = abilityFromStatId(a.abilityModifierStatId);
@@ -58,9 +65,9 @@ export function convertActions(d: Raw): ActionEntry[] {
   const out: ActionEntry[] = [];
   for (const [group, items] of Object.entries(groups)) {
     const source = (SOURCES as readonly string[]).includes(group) ? (group as GroupSource) : 'class';
-    arr(items).forEach((a, i) => out.push(fromGroup(obj(a), source, keyId(obj(a), group, i))));
+    for (const a of arr(items)) out.push(fromGroup(obj(a), source, keyId(obj(a))));
   }
-  arr(d.customActions).forEach((a, i) => out.push(fromCustom(obj(a), keyId(obj(a), 'custom', i))));
-  const seen = new Set<string>();
-  return out.filter((a) => (seen.has(a.key) ? false : (seen.add(a.key), true)));
+  for (const a of arr(d.customActions)) out.push(fromCustom(obj(a), keyId(obj(a))));
+  // Two actions can share an id and a granting component; both are kept.
+  return numberDuplicates(out);
 }
