@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { loadRaw } from '../../../test-utils/fixtures';
 import { memoryServer, type MemoryServer } from './remote/memory';
-import { CHARACTER_LIMIT, type Remote } from './remote/types';
+import { CHARACTER_LIMIT, RemoteError, type Remote } from './remote/types';
 import { memoryStorage, type AppStorage, type StoredCharacter } from './storage';
 import { useStore } from './store';
 import { syncOnce } from './sync/engine';
@@ -83,6 +83,33 @@ describe('who is signed in', () => {
     expect(state().session?.profile).toMatchObject({ approved: false });
     server.addUser(DM, 'Dee', { approved: true, admin: true });
     expect(await server.remote({ userId: DM }).pullCharacters(0)).toEqual([]);
+  });
+
+  it('opens from the device when the account cannot be reached, and syncs once it can', async () => {
+    const storage = memoryStorage();
+    const server = testServer();
+    await seed('vlad', storage, testRemote(server));
+    await state().syncNow();
+    // The same device later, with no connection: the account cannot say who is signed in, so its
+    // start keeps the callback and every call fails as offline until the test calls it.
+    const inner = testRemote(server);
+    let reached = false;
+    let announce: (userId: string | null) => void = () => undefined;
+    const remote: Remote = {
+      ...inner,
+      start: async (onUser) => { announce = onUser; },
+      profile: () => (reached ? inner.profile() : Promise.reject(new RemoteError('offline'))),
+    };
+    await state().init(storage, remote);
+    expect(state().session?.userId).toBe(TEST_USER);
+    expect(state().characters.map((c) => c.name)).toEqual(['Vlad']);
+    expect(state().syncState).toBe('waiting');
+    await state().syncNow();
+    expect(state().syncState).toBe('waiting');
+    reached = true;
+    announce(TEST_USER);
+    await settle();
+    expect(state().syncState).toBe('saved');
   });
 
   it('notices approval at the next sync and then sends what it holds', async () => {

@@ -23,6 +23,14 @@ function failure(answer: Answer): RemoteError {
   return remoteErrorFrom({ code: answer.error?.code, status: answer.status, message });
 }
 
+/** What supabase-js's auth calls report when they fail. */
+interface AuthProblem { name?: string; code?: string; message?: string; status?: number }
+
+/** True when an auth call failed because the account could not be reached, not because it said no. */
+function unreachable(error: AuthProblem): boolean {
+  return error.name === 'AuthRetryableFetchError' || failure({ data: null, error, status: error.status }).kind === 'offline';
+}
+
 /** How long a data call may go without an answer before it counts as no connection. */
 export const CALL_LIMIT_MS = 20_000;
 /** How long start-up waits to learn who is signed in before it carries on without knowing. */
@@ -102,27 +110,43 @@ async function paged(afterRev: number, size: number, page: (after: number) => Pr
  */
 export function supabaseRemote(client: SupabaseClient, env: ImportEnv): Remote {
   let userId: string | null = null;
+  /** False until the account has said who is signed in. At an offline start it cannot say. */
+  let known = false;
 
   const me = (): string => {
+    if (!known) throw new RemoteError('offline', 'who is signed in is not known yet');
     if (userId === null) throw new RemoteError('unauthorized');
     return userId;
   };
 
   return {
     async start(onUser) {
-      let told = false;
       const tell = (id: string | null): void => {
-        if (told && id === userId) return;
-        told = true;
+        if (known && id === userId) return;
+        known = true;
         userId = id;
         onUser(id);
       };
+      // Changes after the first reading. The library also announces the first reading itself
+      // (INITIAL_SESSION), and with nobody signed in when it could not reach the account; `start`
+      // does that reading below, where it can tell the two apart.
+      client.auth.onAuthStateChange((event, session) => {
+        if (event === 'INITIAL_SESSION') return;
+        tell(session?.user.id ?? null);
+      });
       // Reads the session kept on this device, first finishing a sign-in that has just come back.
-      // If that fails (the session cannot be read, or cannot be renewed), nobody is signed in as
-      // far as the account is concerned. The store keeps its own record of who was.
-      const { data } = await client.auth.getSession();
-      tell(data.session?.user.id ?? null);
-      client.auth.onAuthStateChange((_event, session) => tell(session?.user.id ?? null));
+      // A session that has expired is renewed here, which needs the account. If the account cannot
+      // be reached, the session has not ended: nothing is reported, every call answers as offline,
+      // and the library announces the session above once it has renewed it.
+      const read = Promise.resolve(client.auth.getSession()).then(
+        ({ data, error }) => {
+          if (data.session) tell(data.session.user.id);
+          else if (!error || !unreachable(error)) tell(null);
+        },
+        () => undefined,
+      );
+      // On a weak signal the renewal can stall. The app does not wait for it.
+      await within(read, START_LIMIT_MS);
     },
 
     async signIn() {
@@ -182,9 +206,19 @@ export function supabaseRemote(client: SupabaseClient, env: ImportEnv): Remote {
     },
 
     async importCharacter(ddbId) {
-      const { data } = await client.auth.getSession();
-      const token = data.session?.access_token;
-      if (!token) return { status: 'unauthorized' };
+      let token: string | undefined;
+      let offline = false;
+      try {
+        const read = await within(client.auth.getSession(), START_LIMIT_MS);
+        if (read === timedOut) offline = true;
+        else {
+          token = read.data.session?.access_token;
+          offline = !token && !!read.error && unreachable(read.error);
+        }
+      } catch {
+        offline = true;
+      }
+      if (!token) return { status: offline ? 'unreachable' : 'unauthorized' };
       return fetchCharacter(ddbId, importEndpoint(env, token));
     },
   };

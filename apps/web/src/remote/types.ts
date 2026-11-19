@@ -81,7 +81,8 @@ export interface Remote {
   /**
    * Reads the session kept on this device, completing a sign-in that has just returned to the
    * page. Calls `onUser` with the signed-in user's ID (or null) once before it resolves, and
-   * again whenever that changes.
+   * again whenever that changes. The one exception: if the account cannot be reached to say who
+   * is signed in, `onUser` is not called until it can be, and every call rejects as `offline`.
    */
   start(onUser: (userId: string | null) => void): Promise<void>;
   /** Starts sign-in. With Supabase this leaves the page for Discord. */

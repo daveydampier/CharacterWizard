@@ -1,14 +1,14 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DEV_USER, defaultRemote, hasAccount } from './index';
-import { CALL_LIMIT_MS, CHARACTER_PAGE, ITEM_PAGE, supabaseRemote } from './supabase';
+import { CALL_LIMIT_MS, CHARACTER_PAGE, ITEM_PAGE, START_LIMIT_MS, supabaseRemote } from './supabase';
 
 const ENV = { VITE_SUPABASE_URL: 'https://abc.supabase.co', VITE_SUPABASE_KEY: 'sb_publishable_test' };
 
 interface Answer { data: unknown; error: { code?: string; message?: string } | null; status?: number }
 
 /** What supabase-js's auth calls resolve with when they fail. They do not throw. */
-interface AuthProblem { message?: string; status?: number }
+interface AuthProblem { name?: string; message?: string; status?: number }
 
 /**
  * A stand-in for the supabase-js client that records each data call as a line of text
@@ -18,7 +18,8 @@ function fakeClient(session: { userId: string; token: string } | null = { userId
   const calls: string[] = [];
   const answers: (Answer | 'stall')[] = [];
   let authListener: (event: string, session: unknown) => void = () => undefined;
-  const sessionData = () => ({
+  type SessionResult = { data: { session: unknown }; error: AuthProblem | null };
+  const sessionData = (): SessionResult => ({
     data: { session: session ? { user: { id: session.userId }, access_token: session.token } : null }, error: null,
   });
 
@@ -42,7 +43,7 @@ function fakeClient(session: { userId: string; token: string } | null = { userId
   };
 
   const auth = {
-    getSession: vi.fn(async () => sessionData()),
+    getSession: vi.fn(async (): Promise<SessionResult> => sessionData()),
     onAuthStateChange: vi.fn((listener: typeof authListener) => {
       authListener = listener;
       return { data: { subscription: { unsubscribe: () => undefined } } };
@@ -64,7 +65,7 @@ function fakeClient(session: { userId: string; token: string } | null = { userId
     answer: (data: unknown, status = 200) => answers.push({ data, error: null, status }),
     stall: () => answers.push('stall'),
     fail: (error: { code?: string; message?: string }, status?: number) => answers.push({ data: null, error, status }),
-    emit: (userId: string | null) => authListener('TOKEN_REFRESHED', userId ? { user: { id: userId } } : null),
+    emit: (userId: string | null, event = 'TOKEN_REFRESHED') => authListener(event, userId ? { user: { id: userId } } : null),
   };
 }
 
@@ -138,6 +139,75 @@ describe('supabaseRemote: who is signed in', () => {
     await expect(remote.profile()).rejects.toMatchObject({ kind: 'unauthorized' });
     await expect(remote.pullCharacters(0)).rejects.toMatchObject({ kind: 'unauthorized' });
     expect(fake.calls).toEqual([]);
+  });
+
+  /** What getSession resolves with when the account cannot be reached to renew an expired token. */
+  const UNREACHABLE = {
+    data: { session: null }, error: { name: 'AuthRetryableFetchError', message: 'Failed to fetch', status: 0 },
+  };
+
+  it('does not say anyone signed out when the account cannot be reached at start', async () => {
+    vi.stubGlobal('fetch', vi.fn());
+    const fake = fakeClient();
+    fake.auth.getSession.mockResolvedValueOnce(UNREACHABLE);
+    const { remote, seen } = await started(fake);
+    expect(seen).toEqual([]);
+    await expect(remote.profile()).rejects.toMatchObject({ name: 'RemoteError', kind: 'offline' });
+    expect(fake.calls).toEqual([]);
+    fake.auth.getSession.mockResolvedValueOnce(UNREACHABLE);
+    expect(await remote.importCharacter('1')).toEqual({ status: 'unreachable' });
+    fake.emit(null, 'INITIAL_SESSION');
+    expect(seen).toEqual([]);
+    fake.emit('user-ann');
+    expect(seen).toEqual(['user-ann']);
+    fake.answer(null);
+    await remote.profile();
+    expect(fake.calls).toHaveLength(1);
+  });
+
+  it('says the session has ended when the account says so', async () => {
+    const fake = fakeClient();
+    fake.auth.getSession.mockResolvedValueOnce(UNREACHABLE);
+    const { remote, seen } = await started(fake);
+    fake.emit(null, 'SIGNED_OUT');
+    expect(seen).toEqual([null]);
+    await expect(remote.profile()).rejects.toMatchObject({ kind: 'unauthorized' });
+  });
+
+  it('treats a refused session at start as signed out', async () => {
+    const fake = fakeClient();
+    fake.auth.getSession.mockResolvedValueOnce({
+      data: { session: null }, error: { name: 'AuthApiError', message: 'Invalid Refresh Token', status: 400 },
+    });
+    const { seen } = await started(fake);
+    expect(seen).toEqual([null]);
+  });
+
+  it('does not wait for ever to learn who is signed in', async () => {
+    vi.useFakeTimers();
+    const fake = fakeClient();
+    let release: (value: Awaited<ReturnType<typeof fake.auth.getSession>>) => void = () => undefined;
+    fake.auth.getSession.mockReturnValueOnce(new Promise((resolve) => { release = resolve; }));
+    const remote = supabaseRemote(fake.client, ENV);
+    const seen: (string | null)[] = [];
+    let done = false;
+    const start = remote.start((userId) => seen.push(userId)).then(() => { done = true; });
+    await vi.advanceTimersByTimeAsync(START_LIMIT_MS - 1);
+    expect(done).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    await start;
+    expect(done).toBe(true);
+    expect(seen).toEqual([]);
+    await expect(remote.profile()).rejects.toMatchObject({ kind: 'offline' });
+    release({ data: { session: { user: { id: 'user-ann' }, access_token: 't' } }, error: null });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(seen).toEqual(['user-ann']);
+  });
+
+  it('ignores the first announcement the library makes itself', async () => {
+    const { fake, seen } = await started();
+    fake.emit(null, 'INITIAL_SESSION');
+    expect(seen).toEqual(['user-ann']);
   });
 });
 
