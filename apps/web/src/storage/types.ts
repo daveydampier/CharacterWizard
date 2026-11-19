@@ -1,27 +1,65 @@
-import type { PlayState } from '@cw/model';
+/** The kinds of item that sync to the account, one row each in `character_items`. */
+export const SYNCED_KINDS = ['play', 'edit', 'custom', 'order'] as const;
+export type SyncedKind = (typeof SYNCED_KINDS)[number];
 
-/** One imported character. Mirrors the `characters` table that milestone 3 adds. */
+/** `turn` (the Action, Bonus Action and Reaction pills) never leaves the device. */
+export type ItemKind = SyncedKind | 'turn';
+
+/** The key of the one `play` item and the one `turn` item each character has. */
+export const STATE_KEY = 'state';
+
+/** One imported character. Mirrors a row of the `characters` table. */
 export interface StoredCharacter {
-  /** Local UUID. */
+  /** `ddb-<ddbId>-<ownerId>` for an imported character; a UUID for pasted JSON with no D&D Beyond ID. */
   id: string;
-  /** The D&D Beyond character ID, as a string. Re-import finds the record by it. */
+  /** The account that owns it. Null only for a character imported before accounts existed. */
+  ownerId: string | null;
+  /** The D&D Beyond character ID, as a string. "0" when the JSON had none. */
   ddbId: string;
   name: string;
-  /** The D&D Beyond response exactly as it was imported. Converted on load, never stored converted. */
+  /** The D&D Beyond response exactly as it was imported. Null once the character is deleted. */
   rawJson: unknown;
   /** ISO 8601 date and time. */
   importedAt: string;
+  /** When this record last changed, by this device's clock when it made the change. */
+  updatedAt: string;
+  /** A deleted character is kept until the account has been told. */
+  deleted: boolean;
+  /** Changed on this device and not yet accepted by the account. */
+  dirty: boolean;
+}
+
+/** Something attached to a character: what is spent, one ability's edits, one view's order. */
+export interface StoredItem {
+  characterId: string;
+  kind: ItemKind;
+  key: string;
+  /** Checked and repaired by whoever reads it. Null once the item is deleted. */
+  data: unknown;
+  updatedAt: string;
+  deleted: boolean;
+  dirty: boolean;
 }
 
 /**
- * Where characters and play state are kept. Named AppStorage because `Storage` is already the
- * browser's own type for localStorage. Milestone 3 adds sync behind this same interface.
+ * Where this device keeps its copy of everything. Named AppStorage because `Storage` is already
+ * the browser's own type for localStorage. Every value is copied on the way in and on the way out.
  */
 export interface AppStorage {
+  /** Every character, including deleted ones that the account has not yet been told about. */
   listCharacters(): Promise<StoredCharacter[]>;
   putCharacter(character: StoredCharacter): Promise<void>;
-  /** Also deletes the character's play state. */
-  deleteCharacter(id: string): Promise<void>;
-  getPlay(characterId: string): Promise<PlayState | null>;
-  putPlay(characterId: string, state: PlayState): Promise<void>;
+  /** Removes the character and every item it has from this device. */
+  removeCharacter(id: string): Promise<void>;
+  /** Stores `character` in place of the one with `oldId`, moving that character's items to it. */
+  rekeyCharacter(oldId: string, character: StoredCharacter): Promise<void>;
+  /** One character's items, or every item when no ID is given. */
+  listItems(characterId?: string): Promise<StoredItem[]>;
+  putItem(item: StoredItem): Promise<void>;
+  removeItem(characterId: string, kind: ItemKind, key: string): Promise<void>;
+  /** A small named value: who is signed in, how far fetching has got. Null when never set. */
+  getMeta(name: string): Promise<unknown>;
+  setMeta(name: string, value: unknown): Promise<void>;
+  /** Empties everything. Used when signing out. */
+  clear(): Promise<void>;
 }

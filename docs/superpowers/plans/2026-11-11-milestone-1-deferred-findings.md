@@ -17,9 +17,11 @@ All six were settled in the milestone 2 design on 2026-11-11. The decisions are 
 
 ## Settle in milestone 3 (accounts and overlays, where keys become persistent)
 
-- Two equipped copies of the same item share one key, so only one appears.
-- Actions with the same `id` and `componentId` but different `entityTypeId` share a key.
-- Actions with no id and no name get a positional key that changes if entries are reordered.
+All three were settled in the milestone 3 design on 2026-11-18. The decisions are recorded in the spec (section 5.1, "Key collisions"). No fixture has any of the three, so each is covered by synthetic converter input.
+
+- Two equipped copies of the same item share one key, so only one appears. **Settled:** both appear; the second and later copies get `#2`, `#3` added to the key, each with its own pool.
+- Actions with the same `id` and `componentId` but different `entityTypeId` share a key. **Settled:** the same rule; the later action is no longer dropped.
+- Actions with no id and no name get a positional key that changes if entries are reordered. **Settled:** keyed by a hash of the description and activation.
 
 ## Rules accuracy, when a fixture exists
 

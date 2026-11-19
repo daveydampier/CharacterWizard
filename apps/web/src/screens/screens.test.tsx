@@ -3,9 +3,11 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { loadRaw } from '../../../../test-utils/fixtures';
 import { ErrorBoundary } from '../App';
+import { fetchCharacter } from '../import/client';
+import { CHARACTER_LIMIT, type ImportResult, type Remote } from '../remote/types';
 import { memoryStorage, type AppStorage } from '../storage';
 import { useStore } from '../store';
-import { seed } from '../test/helpers';
+import { TEST_USER, ability, rawWithId, savedPlay, seed, testRemote, testServer } from '../test/helpers';
 import { renderAt } from '../test/render';
 
 const json = (status: number, body: unknown) =>
@@ -17,9 +19,27 @@ const stubFetch = (response: () => Response | Promise<Response>) => {
   return mock;
 };
 
-async function emptyApp(storage: AppStorage = memoryStorage()) {
-  await useStore.getState().init(storage);
+/** The test player's device on an account that sends imports to the import service, as local development does. */
+const importingRemote = () => testRemote(testServer({ importer: (ddbId) => fetchCharacter(ddbId) }));
+
+async function emptyApp(storage: AppStorage = memoryStorage(), remote: Remote = importingRemote()) {
+  await useStore.getState().init(storage, remote);
 }
+
+/** A device whose signed-in player already has ten characters, with D&D Beyond IDs 1 to 10. */
+async function fullApp(remote: Remote = importingRemote()) {
+  const storage = memoryStorage();
+  const rawJson = loadRaw('vlad');
+  for (let i = 1; i <= CHARACTER_LIMIT; i += 1) {
+    await storage.putCharacter({
+      id: `ddb-${i}-${TEST_USER}`, ownerId: TEST_USER, ddbId: String(i), name: `Vlad ${i}`, rawJson,
+      importedAt: '2026-01-01T10:00:00.000Z', updatedAt: '2026-01-01T10:00:00.000Z', deleted: false, dirty: true,
+    });
+  }
+  await emptyApp(storage, remote);
+}
+
+const LIMIT = 'You have ten characters. Delete one to add another.';
 
 describe('Home screen', () => {
   it('invites the first import when there are no characters', async () => {
@@ -55,7 +75,7 @@ describe('Home screen', () => {
   });
 
   it('re-imports a character by its D&D Beyond ID', async () => {
-    await seed('vlad');
+    await seed('vlad', memoryStorage(), importingRemote());
     renderAt({ name: 'home' });
     const fetchMock = stubFetch(() => json(200, { status: 'ok', raw: loadRaw('vlad') }));
     await userEvent.click(screen.getByRole('button', { name: 'Re-import' }));
@@ -65,7 +85,7 @@ describe('Home screen', () => {
   });
 
   it('keeps the saved copy when a re-import fails', async () => {
-    await seed('vlad');
+    await seed('vlad', memoryStorage(), importingRemote());
     renderAt({ name: 'home' });
     stubFetch(() => json(403, { status: 'private' }));
     await userEvent.click(screen.getByRole('button', { name: 'Re-import' }));
@@ -216,6 +236,131 @@ describe('Import screen', () => {
     expect(await screen.findByText("That doesn't look like a D&D Beyond character.")).toBeInTheDocument();
     expect(useStore.getState().characters).toEqual([]);
   });
+
+  it('asks the account, which can refuse before the import service is called', async () => {
+    const importer = vi.fn(async (_ddbId: string): Promise<ImportResult> => ({ status: 'ok', raw: loadRaw('vlad') }));
+    const server = testServer({ importer });
+    await emptyApp(memoryStorage(), testRemote(server));
+    // Access was removed since this device last heard from the account.
+    server.addUser(TEST_USER, 'Tess', { approved: false });
+    renderAt({ name: 'import' });
+    await userEvent.type(linkField(), '42');
+    await userEvent.click(screen.getByRole('button', { name: 'Import' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent("Your DM hasn't approved your account yet.");
+    expect(importer).not.toHaveBeenCalled();
+
+    server.addUser(TEST_USER, 'Tess', { approved: true });
+    await userEvent.click(screen.getByRole('button', { name: 'Import' }));
+    expect(await screen.findByRole('heading', { name: 'Vlad' })).toBeInTheDocument();
+    expect(importer.mock.calls).toEqual([['42']]);
+  });
+
+  it.each([
+    [401, 'unauthorized', 'Your sign-in has expired. Sign in again, then retry.'],
+    [403, 'not-approved', "Your DM hasn't approved your account yet."],
+    [429, 'rate-limited', 'Too many imports. Try again in an hour.'],
+  ])('explains a %i %s answer and keeps the paste section closed', async (httpStatus, status, message) => {
+    await emptyApp();
+    renderAt({ name: 'import' });
+    stubFetch(() => json(httpStatus, { status }));
+    await userEvent.type(linkField(), '42');
+    await userEvent.click(screen.getByRole('button', { name: 'Import' }));
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(message);
+    expect(alert).not.toHaveTextContent('You can paste the character JSON below instead.');
+    expect(screen.getByText('Paste the character JSON instead').closest('details')).not.toHaveAttribute('open');
+    expect(useStore.getState().characters).toEqual([]);
+  });
+
+  it('marks the paste section as one that unfolds', async () => {
+    await emptyApp();
+    renderAt({ name: 'import' });
+    const summary = screen.getByText('Paste the character JSON instead').closest('summary');
+    const mark = summary?.lastElementChild;
+    expect(mark).toHaveTextContent('▾');
+    expect(mark).toHaveAttribute('aria-hidden', 'true');
+  });
+
+  describe('when the player already has ten characters', () => {
+    it('says so instead of asking for an eleventh by link', async () => {
+      await fullApp();
+      renderAt({ name: 'import' });
+      const fetchMock = stubFetch(() => json(200, { status: 'ok', raw: rawWithId('minkis', 99) }));
+      await userEvent.type(linkField(), '99');
+      await userEvent.click(screen.getByRole('button', { name: 'Import' }));
+      expect(screen.getByRole('alert')).toHaveTextContent(LIMIT);
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(screen.getByRole('button', { name: 'Import' })).toBeEnabled();
+      expect(screen.getByText('Paste the character JSON instead').closest('details')).not.toHaveAttribute('open');
+      expect(useStore.getState().characters).toHaveLength(CHARACTER_LIMIT);
+    });
+
+    it('still imports by link a character the player already has', async () => {
+      await fullApp();
+      renderAt({ name: 'import' });
+      const fetchMock = stubFetch(() => json(200, { status: 'ok', raw: rawWithId('minkis', 3) }));
+      await userEvent.type(linkField(), 'https://www.dndbeyond.com/characters/3');
+      await userEvent.click(screen.getByRole('button', { name: 'Import' }));
+      expect(await screen.findByRole('heading', { name: 'Minkis' })).toBeInTheDocument();
+      expect(fetchMock.mock.calls[0][1]?.body).toBe('{"id":"3"}');
+      expect(window.location.hash).toBe(`#/c/ddb-3-${TEST_USER}/combat`);
+      expect(useStore.getState().characters).toHaveLength(CHARACTER_LIMIT);
+    });
+
+    it('knows a character the player already has when its number is typed with leading zeros', async () => {
+      await fullApp();
+      renderAt({ name: 'import' });
+      stubFetch(() => json(200, { status: 'ok', raw: rawWithId('minkis', 3) }));
+      await userEvent.type(linkField(), '003');
+      await userEvent.click(screen.getByRole('button', { name: 'Import' }));
+      expect(await screen.findByRole('heading', { name: 'Minkis' })).toBeInTheDocument();
+      expect(useStore.getState().characters).toHaveLength(CHARACTER_LIMIT);
+    });
+
+    it('does not count a table admin\'s view of other players\' characters', async () => {
+      const server = testServer({ importer: (ddbId) => fetchCharacter(ddbId) });
+      server.addUser('user-dm', 'Dee', { approved: true, admin: true });
+      await fullApp(testRemote(server));
+      await useStore.getState().syncNow();
+      await emptyApp(memoryStorage(), server.remote({ userId: 'user-dm' }));
+      expect(useStore.getState().characters).toHaveLength(CHARACTER_LIMIT);
+      renderAt({ name: 'import' });
+      stubFetch(() => json(200, { status: 'ok', raw: rawWithId('minkis', 3) }));
+      await userEvent.type(linkField(), '3');
+      await userEvent.click(screen.getByRole('button', { name: 'Import' }));
+      expect(await screen.findByRole('heading', { name: 'Minkis' })).toBeInTheDocument();
+      expect(window.location.hash).toBe('#/c/ddb-3-user-dm/combat');
+      expect(useStore.getState().characters).toHaveLength(CHARACTER_LIMIT + 1);
+    });
+
+    it('says so for pasted JSON of an eleventh', async () => {
+      await fullApp();
+      renderAt({ name: 'import' });
+      fireEvent.change(screen.getByLabelText('Character JSON'), { target: { value: JSON.stringify(rawWithId('minkis', 99)) } });
+      await userEvent.click(screen.getByRole('button', { name: 'Use this JSON' }));
+      expect(await screen.findByRole('alert')).toHaveTextContent(LIMIT);
+      expect(screen.getByRole('alert')).not.toHaveTextContent("That doesn't look like a D&D Beyond character.");
+      expect(useStore.getState().characters).toHaveLength(CHARACTER_LIMIT);
+    });
+
+    it('says so for a chosen file of an eleventh', async () => {
+      await fullApp();
+      renderAt({ name: 'import' });
+      const file = new File([JSON.stringify(rawWithId('sid', 98))], 'sid.json', { type: 'application/json' });
+      await userEvent.upload(screen.getByLabelText('Or choose a JSON file'), file);
+      expect(await screen.findByRole('alert')).toHaveTextContent(LIMIT);
+      expect(useStore.getState().characters).toHaveLength(CHARACTER_LIMIT);
+    });
+
+    it('still takes pasted JSON of a character the player already has', async () => {
+      await fullApp();
+      renderAt({ name: 'import' });
+      fireEvent.change(screen.getByLabelText('Character JSON'), { target: { value: JSON.stringify(rawWithId('minkis', 3)) } });
+      await userEvent.click(screen.getByRole('button', { name: 'Use this JSON' }));
+      expect(await screen.findByRole('heading', { name: 'Minkis' })).toBeInTheDocument();
+      expect(useStore.getState().characters).toHaveLength(CHARACTER_LIMIT);
+    });
+  });
 });
 
 describe('App', () => {
@@ -240,6 +385,38 @@ describe('App', () => {
     await emptyApp(broken);
     renderAt({ name: 'home' });
     expect(screen.getByRole('alert')).toHaveTextContent("This device isn't saving changes.");
+  });
+
+  it('shows nothing that can be tapped until the character\'s saved play state has been read', async () => {
+    const inner = memoryStorage();
+    let held: Promise<void> | null = null;
+    const storage: AppStorage = {
+      ...inner,
+      async listItems(characterId) {
+        if (held) await held;
+        return inner.listItems(characterId);
+      },
+    };
+    const server = testServer();
+    const record = await seed('vlad', storage, testRemote(server));
+    useStore.getState().use(ability('Hex'), 'combat');
+    await waitFor(async () => expect(await savedPlay(inner, record.id)).toMatchObject({ spent: { pact: 1 } }));
+    // The same device, opened again: nothing is open, and the next read of the saved state is held.
+    await useStore.getState().init(storage, testRemote(server));
+    let release: () => void = () => undefined;
+    held = new Promise<void>((resolve) => { release = resolve; });
+
+    renderAt({ name: 'character', id: record.id, view: 'combat' });
+    expect(await screen.findByText('Loading…')).toBeInTheDocument();
+    expect(useStore.getState()).toMatchObject({ openId: record.id, loaded: false });
+    expect(screen.queryByRole('button', { name: /^Use / })).toBeNull();
+    expect(screen.queryByRole('button')).toBeNull();
+
+    release();
+    expect(await screen.findByRole('button', { name: 'Start my turn' })).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /^Use / }).length).toBeGreaterThan(0);
+    expect(screen.queryByText('Loading…')).toBeNull();
+    expect(useStore.getState().play.spent).toEqual({ pact: 1 });
   });
 
   it('switches between Combat and Explore from the header', async () => {
@@ -275,10 +452,12 @@ describe('App', () => {
     consoleError.mockRestore();
   });
 
-  it('loads stored characters by itself on a fresh start', async () => {
-    useStore.setState({ ready: false, characters: [] });
+  it('loads the device and the account by itself on a fresh start, and asks for sign-in', async () => {
+    useStore.setState({ ready: false, session: null, characters: [] });
     renderAt({ name: 'home' });
     expect(screen.getByText('Loading…')).toBeInTheDocument();
+    // No Supabase project is configured under test, so the app chooses the local stand-in account.
+    await userEvent.click(await screen.findByRole('button', { name: 'Continue as test player' }));
     expect(await screen.findByText('Add your first character')).toBeInTheDocument();
     expect(useStore.getState().persistent).toBe(true);
   });

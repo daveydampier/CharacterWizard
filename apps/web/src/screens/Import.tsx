@@ -1,8 +1,9 @@
 import { parseCharacterId } from '@cw/ddb-import';
 import { useState, type FormEvent } from 'react';
-import { IMPORT_MESSAGES, PRIVACY_HINT, fetchCharacter } from '../import/client';
+import { IMPORT_MESSAGES, LIMIT_MESSAGE, PRIVACY_HINT } from '../import/client';
 import { navigate, routeHref } from '../router';
 import { useStore } from '../store';
+import { characterId } from '../sync/engine';
 
 const NOT_A_CHARACTER = "That doesn't look like a D&D Beyond character.";
 const SAVE_FAILED = "Couldn't add this character. Try again.";
@@ -10,6 +11,8 @@ const READ_FAILED = "Couldn't read that file.";
 const PASTE_HINT = 'You can paste the character JSON below instead.';
 
 export function ImportScreen() {
+  const importCharacter = useStore((s) => s.importCharacter);
+  const canAddCharacter = useStore((s) => s.canAddCharacter);
   const saveImported = useStore((s) => s.saveImported);
   const [link, setLink] = useState('');
   const [json, setJson] = useState('');
@@ -31,18 +34,28 @@ export function ImportScreen() {
     } catch {
       return fail(SAVE_FAILED);
     }
-    if (!record) return fail(NOT_A_CHARACTER);
+    // Nothing was stored: the account is full, or this is not a character.
+    if (!record) return fail(canAddCharacter() ? NOT_A_CHARACTER : LIMIT_MESSAGE);
     navigate({ name: 'character', id: record.id, view: 'combat' });
+  }
+
+  /** True when the signed-in player already has this D&D Beyond character, so importing it adds nothing. */
+  function alreadyHas(ddbId: string): boolean {
+    const { session, characters } = useStore.getState();
+    // The number, not the text: "003" is the character stored as "3".
+    return session !== null && characters.some((c) => c.id === characterId(String(Number(ddbId)), session.userId));
   }
 
   async function importByLink(event: FormEvent): Promise<void> {
     event.preventDefault();
     const id = parseCharacterId(link);
     if (id === null) return fail('Paste a D&D Beyond character link or its number.');
+    // Checked before asking, so a full account does not spend an import on a character it cannot keep.
+    if (!canAddCharacter() && !alreadyHas(id)) return fail(LIMIT_MESSAGE);
     setBusy(true);
     setError(null);
     setHint(null);
-    const result = await fetchCharacter(id);
+    const result = await importCharacter(id);
     setBusy(false);
     if (result.status === 'ok') return store(result.raw);
     if (result.status === 'unreachable' || result.status === 'upstream-error') {
@@ -101,7 +114,10 @@ export function ImportScreen() {
         onToggle={(event) => setPasteOpen(event.currentTarget.open)}
         className="mt-6 rounded-lg border border-slate-200 bg-white p-3"
       >
-        <summary className="flex min-h-11 cursor-pointer items-center text-sm font-medium">Paste the character JSON instead</summary>
+        <summary className="flex min-h-11 cursor-pointer items-center justify-between text-sm font-medium">
+          <span>Paste the character JSON instead</span>
+          <span aria-hidden="true">▾</span>
+        </summary>
         <p className="mt-2 text-xs text-slate-600">
           Use this if the import can't reach D&D Beyond. Paste the JSON, or choose a saved file.
         </p>

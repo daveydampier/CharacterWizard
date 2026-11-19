@@ -5,7 +5,7 @@ import type { Slug } from '../../../../test-utils/fixtures';
 import { CharacterScreen } from '../screens/Character';
 import { memoryStorage } from '../storage';
 import { useStore } from '../store';
-import { seed } from '../test/helpers';
+import { seed, testRemote } from '../test/helpers';
 
 async function openCombat(slug: Slug) {
   const record = await seed(slug);
@@ -151,7 +151,7 @@ describe('Combat view', () => {
   });
 
   it('says so when the sheet has no class or level', async () => {
-    await useStore.getState().init(memoryStorage());
+    await useStore.getState().init(memoryStorage(), testRemote());
     const record = await useStore.getState().saveImported({ data: { id: 7, name: 'Blank' } });
     if (!record) throw new Error('the blank sheet did not import');
     render(<CharacterScreen id={record.id} view="combat" />);

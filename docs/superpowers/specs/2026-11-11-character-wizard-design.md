@@ -1,7 +1,7 @@
 # Character Wizard: design
 
 Date: 2026-11-11
-Status: approved in conversation, awaiting written review. Milestone 2 decisions added 2026-11-11 (sections 4, 5, 6, 8, 10, 12, 15 and 17).
+Status: approved in conversation, awaiting written review. Milestone 2 decisions added 2026-11-11 (sections 4, 5, 6, 8, 10, 12, 15 and 17). Milestone 3 decisions added 2026-11-18 (sections 2, 4, 5, 6, 7, 10, 11, 12, 13, 14, 15, 16 and 17). Details settled by the Part A reviews added 2026-11-19 (sections 5.2, 5.3, 10.5, 11 and 12).
 
 ## 1. Purpose
 
@@ -24,7 +24,11 @@ The app is built for any D&D Beyond character, not for the characters used to te
 
 | Topic | Decision |
 |---|---|
-| Launch audience | The DM's own table first; invite only |
+| Launch audience | The DM's own table first; by approval only |
+| Sign-in | Discord, through Supabase Auth. Sign-in is required to use the app. No passwords and no emails |
+| Who may use it | Anyone can sign in with Discord. A new account can do nothing until a table admin approves it in the app |
+| Table admin | Can open and edit every character at the table, exactly as its owner can |
+| Edits | A player's changes are layered over the imported sheet by ability key and survive a re-import. Playing and arranging are separate modes |
 | Play tracking | The app tracks the turn (Action, Bonus Action, Reaction) and limited-use resources (spell slots, feature uses). Hit points and conditions stay on D&D Beyond or paper |
 | Suggestion intelligence | Deterministic rules plus tags. No machine learning and no LLM in this version |
 | Homebrew | First-class. Every ability is tagged from one of three sources: imported data, curated SRD data, or user edits. The engine reads only tags |
@@ -100,7 +104,9 @@ Libraries arrive with the milestone that first uses them: supabase-js and dnd-ki
 
 The Edge Function's logic lives in `supabase/functions/_shared/import-handler.ts`. It is written against the web-standard `Request` and `Response` only, so Vitest tests it and the Vite dev server mounts the same handler at the same path.
 
-The web app routes by URL hash (`#/`, `#/import`, `#/about`, `#/c/{id}/combat`, `#/c/{id}/explore`), so the phone's back button works and static hosting needs no rewrite rules.
+The web app routes by URL hash (`#/`, `#/import`, `#/about`, `#/players`, `#/c/{id}/combat`, `#/c/{id}/explore`), so the phone's back button works and static hosting needs no rewrite rules. A character ID is percent-encoded in the route.
+
+From milestone 3 the web app reaches Supabase only through one `Remote` interface: sign-in, profiles, sending changes, fetching changes and import. `supabaseRemote` implements it with supabase-js. `memoryRemote` implements the same rules in memory. Tests use it, and the dev server uses it when no Supabase address is configured, with a "Continue as test player" button, so local development still needs no Supabase project.
 
 If the endpoint changes, only `ddb-import` changes. A PDF or manual-entry importer can later produce the same `Character` format.
 
@@ -162,7 +168,9 @@ interface Ability {
 
 **Unattuned items:** an equipped weapon that needs attunement and is not attuned has no magic bonus, no extra damage and no charge pool, and carries the note "Not attuned: magic properties are off".
 
-**Ability key:** `{kind}:{definitionId}:{grantingComponentId or "base"}`. Spells add a fourth part, `slot`, `free`, `atwill` or `item`, because one feature can grant the same spell twice with different costs: Misty Step cast with a slot and Misty Step cast free through a subclass feature. Every spell granted by an item uses `item`, whatever D&D Beyond's slot flag says. Custom abilities created in the app use a UUID.
+**Ability key:** `{kind}:{definitionId}:{grantingComponentId or "base"}`. Spells add a fourth part, `slot`, `free`, `atwill` or `item`, because one feature can grant the same spell twice with different costs: Misty Step cast with a slot and Misty Step cast free through a subclass feature. Every spell granted by an item uses `item`, whatever D&D Beyond's slot flag says. An ability created in the app has the key `own:{uuid}`.
+
+**Key collisions:** edits are stored by key from milestone 3, so two different things must never share one. When two inventory entries or two actions produce the same key, the first keeps it and each later one gets `#2`, `#3` and so on, in sheet order; both are shown, each with its own pool. Spells differ: two spell entries with the same key are one grant listed twice, and only the first is kept. An action with neither an ID nor a name is keyed by a hash of its description and activation, not by its position, so reordering on D&D Beyond does not detach its edits.
 
 **Tag mapping from D&D Beyond spell tags:** `Damage`→damage, `Healing`→healing, `Buff`→buff, `Debuff`→debuff, `Control`→control, `Teleportation`→movement, `Warding`→defence, `Social` and `Deception`→social, `Combat`→ignored, anything else→utility.
 
@@ -178,13 +186,29 @@ Curated entries are matched to imported features by D&D Beyond's definition ID w
 
 | Table | Contents |
 |---|---|
-| `profiles` | `id` (auth user), `display_name`, `is_table_admin` |
-| `characters` | `id`, `owner_id`, `ddb_character_id`, `name`, `raw_json`, `number_overrides` (jsonb), `imported_at`. Unique on (`owner_id`, `ddb_character_id`). Ten per owner, enforced by a trigger |
-| `ability_overlays` | Keyed by (`character_id`, `ability_key`): `timing`, `uses_max`, `uses_reset`, `tags`, `hidden`, `in_combat`, `in_explore`, `combat_position`, `explore_position`. All nullable; null means "use the imported value" |
-| `custom_abilities` | `id`, `character_id`, `definition` (an `Ability` as jsonb) |
-| `resource_state` | `character_id`, `spent` (jsonb of pool key to number spent), `concentration_key` |
-| `usage_events` | `id`, `character_id`, `ability_key`, `view`, `timing`, `plan_key`, `occurred_at` |
-| `feedback` | Keyed by (`character_id`, `target_kind`, `target_key`): `useful`. `target_kind` is `ability` or `plan` |
+| `profiles` | `id` (auth user), `display_name` (from Discord), `approved`, `is_table_admin`, `created_at`. A trigger creates the row, not approved, when a user first signs in |
+| `characters` | `id` (text), `owner_id`, `ddb_character_id`, `name`, `raw_json`, `imported_at`, `updated_at`, `deleted`, `rev`. Ten live characters per owner, enforced by a trigger |
+| `character_items` | Keyed by (`character_id`, `kind`, `key`): `data` (jsonb), `updated_at`, `deleted`, `rev`. Everything attached to a character; the kinds are listed below |
+| `import_log` | `user_id`, `at`. One row per import, read only by the rate limit |
+| `usage_events` (milestone 4) | `id`, `character_id`, `ability_key`, `view`, `timing`, `plan_key`, `occurred_at` |
+| `feedback` (milestone 4) | Keyed by (`character_id`, `target_kind`, `target_key`): `useful`. `target_kind` is `ability` or `plan` |
+
+**Character ID:** `ddb-{ddbCharacterId}-{ownerId}` for an imported character, so two devices that import the same character into the same account make the same record. A random UUID for JSON pasted with no D&D Beyond ID.
+
+**Item kinds** (one row is one item; section 12 calls these "items"):
+
+| `kind` | `key` | `data` |
+|---|---|---|
+| `play` | `state` | `{ spent, concentrationKey }` |
+| `edit` | the ability key | an `AbilityEdit` (section 5.4) |
+| `custom` | the ability's `own:{uuid}` key | a `CustomAbility` (section 5.4) |
+| `order` | `combat` or `explore` | an array of ability keys |
+
+One table holds every kind, so syncing, conflict handling and the access rule are each written once. The database does not check the shape of `data`; the app checks and repairs every item when it reads it (section 5.3).
+
+**Sync columns:** `updated_at` is when the change was made, by the clock of the device that made it. A trigger on both tables caps it at the server's time, silently skips a write that is not newer than the row it would replace, and stamps `rev` from one sequence. The stamp is taken under an advisory lock, so `rev` order is commit order and a device can fetch "everything after the last `rev` I saw" without missing a row. The two database functions that write take the same lock before they touch any row, so that writers queue in one order, and they report as refused only what would be refused again. They check that the caller is approved before they take it.
+
+**Deleting** sets `deleted`. A deleted character keeps its row with `raw_json` null and loses its items; a deleted item keeps its row with `data` null. Every device learns of the deletion at its next fetch.
 
 Turn state (which of Action, Bonus Action and Reaction are spent, and whether a slot was spent this turn) is held on the device only.
 
@@ -192,31 +216,94 @@ Turn state (which of Action, Bonus Action and Reaction are spent, and whether a 
 
 **Pool keys:** a feature, free spell cast or item pool uses its ability or item key. Spell slots use `slot:1` to `slot:9`. Pact Magic slots use `pact`.
 
-Overlays are keyed by ability key, so a re-import keeps every correction and ordering. The same key is what would let homebrew tags be shared between users later.
+Edits are keyed by ability key, so a re-import keeps every correction and ordering. The same key is what would let homebrew tags be shared between users later, by querying inside `data`.
 
-### 5.3 On-device storage (milestone 2 onward)
+### 5.3 On-device storage
 
-One IndexedDB database, `character-wizard`, behind an `AppStorage` interface so that milestone 3 can add sync behind the same calls. (`Storage` is already the browser's name for localStorage.)
+One IndexedDB database, `character-wizard`, behind an `AppStorage` interface. (`Storage` is already the browser's name for localStorage.) Milestone 2 created version 1; milestone 3 upgrades it to version 2, which mirrors the two synced tables.
 
 | Store | Record |
 |---|---|
-| `characters` | `id` (local UUID), `ddbId`, `name`, `rawJson`, `importedAt`. Mirrors the `characters` table. Re-import finds the record by `ddbId` |
-| `play` | `characterId`, `spent`, `concentrationKey`, `turn` (`action`, `bonus`, `reaction`, `slotSpentThisTurn`) |
+| `characters` | `id`, `ownerId`, `ddbId`, `name`, `rawJson`, `importedAt`, `updatedAt`, `deleted`, `dirty`. Re-import finds the record by `ddbId` and owner |
+| `items` | `characterId`, `kind`, `key`, `data`, `updatedAt`, `deleted`, `dirty`. The kinds of section 5.2, plus `turn` (`action`, `bonus`, `reaction`, `slotSpentThisTurn`), which never leaves the device |
+| `meta` | The signed-in user's ID and profile as last seen, and the last `rev` fetched from each table |
+
+`dirty` marks a record changed on this device and not yet accepted by the account.
+
+**Upgrade from version 1:** each `play` record becomes a `play` item and a `turn` item. Characters imported before accounts existed have no owner; at the first sign-in on that device they are given the signed-in user as owner and the character ID of section 5.2, and are marked dirty so that they upload.
+
+**Checked on read:** every record read from the device or fetched from the account is checked and repaired to its expected shape before the app uses it. A play item without `spent` becomes an empty one; an edit with an unknown timing loses that field. A record that cannot be repaired is ignored. If a character's saved state cannot be read at all, the character does not open, so that nothing is written over it.
+
+**Writes** go through one queue per database, so a delete waits for writes still in flight. Both the IndexedDB and the in-memory implementation store a copy of what they are given and return a copy.
 
 Turn state is persisted, because phones discard background tabs when a player switches to D&D Beyond. The one-step undo snapshot is held in memory only.
 
 If IndexedDB is unavailable (private browsing, quota), the app says so and keeps working in memory.
 
+### 5.4 Edits (milestone 3)
+
+A player's changes never alter the imported sheet. They are stored beside it and applied each time the sheet is built.
+
+```ts
+/** A player's changes to one ability. An absent field means "as imported". */
+interface AbilityEdit {
+  timing?: Timing;
+  uses?: { max: number; reset: ResetType } | 'none';
+  tags?: Tag[];
+  roll?: Roll;
+  inCombat?: boolean;
+  inExplore?: boolean;
+  hidden?: boolean;
+}
+
+/** An ability the player added. */
+interface CustomAbility {
+  key: string;                 // own:{uuid}
+  name: string;
+  timing: Timing;
+  roll: Roll;
+  cost:
+    | { kind: 'none' }
+    | { kind: 'uses'; max: number; reset: ResetType }
+    | { kind: 'slot'; minLevel: number };
+  tags: Tag[];
+  concentration: boolean;
+  description: string;         // plain text
+}
+
+interface CharacterEdits {
+  abilities: Record<string, AbilityEdit>;   // by ability key
+  custom: CustomAbility[];
+  order: { combat: string[]; explore: string[] };
+}
+```
+
+`applyEdits(sheet, edits)` in `packages/rules` is a pure function that returns the sheet the views show. The views, the turn engine and the store's play logic read only that sheet and know nothing of edits. It applies to imported abilities, universal actions and custom abilities alike, by key.
+
+- **Timing, tags, roll:** replace the imported value. Edited tags set `tagSource` to `user`.
+- **Uses:** `{ max, reset }` changes the pool the ability already spends from, or gives an ability with no cost a pool under its own key and makes Use spend from it. `'none'` removes the cost. Not offered for an ability that costs a spell slot.
+- **inCombat, inExplore:** override which views list the ability. Unset, Combat lists every timing except `long`, and Explore lists what section 10.2 says. An ability forced into Combat whose timing has no group there is listed under "Other".
+- **hidden:** the ability leaves both views and is listed in `sheet.hidden`. A pool is not shown as a resource chip when at least one ability uses it and all of them are hidden.
+- **order:** within any group, abilities whose key is in the view's list come first, in list order; the rest follow in sheet order.
+- **Custom abilities** are converted to `Ability` records with source `custom` and appended. Editing one rewrites its `custom` item; hiding it or changing its views uses an `AbilityEdit` under its key, like any other ability. Its description is plain text and is escaped before display.
+- The sheet records which keys carry an edit, so a row can show "edited".
+
+An edit whose ability is not on the sheet (an unequipped weapon, a feature lost on re-import) is kept and has no effect.
+
 ## 6. Import flow
 
 1. The player pastes a D&D Beyond character URL or ID. The client extracts the numeric ID and rejects anything else. A URL may carry a query string or fragment.
-2. The client posts `{ "id": "<digits>" }` to the `import-character` Edge Function. It accepts only 1 to 12 digits and requests only the character-service URL above. It sends no cookies or spoofed headers. It answers `{ "status": "ok", "raw": ... }`, or a status of `private`, `not-found`, `upstream-error`, `bad-request` or `unauthorized`.
-3. The raw JSON is stored (on the device in milestone 2; in `characters.raw_json` from milestone 3). Conversion to `Character` runs in the browser on load, so converter fixes apply to existing characters without a re-import.
+2. The client posts `{ "id": "<digits>" }` to the `import-character` Edge Function. It accepts only 1 to 12 digits and requests only the character-service URL above. It sends no cookies or spoofed headers. It answers `{ "status": "ok", "raw": ... }`, or a status of `private`, `not-found`, `upstream-error`, `bad-request`, `unauthorized`, `not-approved` or `rate-limited`.
+3. The raw JSON is stored on the device, and from milestone 3 synced to `characters.raw_json`. Conversion to `Character` runs in the browser on load, so converter fixes apply to existing characters without a re-import.
 4. As a fallback, the import screen accepts the character JSON pasted or uploaded as a file.
 
-**Access before accounts exist (milestone 2):** the caller sends the project's publishable key in the `apikey` header and the function checks it. If the deployed function has no key to check against, it refuses every request rather than skipping the check. The function answers a browser only from the origins listed in its `ALLOWED_ORIGINS` setting. From milestone 3 it requires a signed-in user.
+**Access before accounts exist (milestone 2):** the caller sends the project's publishable key in the `apikey` header and the function checks it. If the deployed function has no key to check against, it refuses every request rather than skipping the check. The function answers a browser only from the origins listed in its `ALLOWED_ORIGINS` setting.
 
-**Local development:** the Vite dev server mounts the same handler at `/functions/v1/import-character`, so no Supabase project is needed to run the app locally.
+**Access from milestone 3:** the function accepts only a signed-in, approved player. It passes the caller's own token to one database function, `record_import`, which answers `ok`, `not-approved` or `rate-limited` and records the import. The database rejects a missing or invalid token itself. The publishable-key check of milestone 2 is removed, and the platform's `verify_jwt` setting is off, because the function's own check does not depend on it. If the deployed function cannot reach the database it refuses every request.
+
+**Limits:** 30 imports per player per hour. The request body is capped at 1 KB and the body relayed from D&D Beyond at 5 MB. The function follows no redirects. The client gives up after 15 seconds and accepts an `ok` answer only when `raw` is an object.
+
+**Local development:** the Vite dev server mounts the same handler at `/functions/v1/import-character`, with the same size caps and no access check, so no Supabase project is needed to run the app locally. The dev server stays reachable from the local network, because that is how a phone reaches it.
 
 | Upstream result | Message to the player |
 |---|---|
@@ -224,8 +311,12 @@ If IndexedDB is unavailable (private browsing, quota), the app says so and keeps
 | 404 | "No character with that ID" |
 | Anything else | "D&D Beyond didn't respond as expected". The saved copy keeps working |
 | The function cannot be reached | "Couldn't reach the import service", with the paste fallback |
+| `unauthorized` | "Your sign-in has expired. Sign in again, then retry" |
+| `not-approved` | "Your DM hasn't approved your account yet" |
+| `rate-limited` | "Too many imports. Try again in an hour" |
+| The account already has ten characters | "You have ten characters. Delete one to add another" (checked before the request is made) |
 
-**Re-import** replaces the raw JSON, keeps overlays and custom abilities, clamps each spent count to the new maximum, drops pools that no longer exist, and clears concentration if that ability is gone. For the character that is open, the play state in memory is the newest copy and is the one clamped and kept.
+**Re-import** replaces the raw JSON, keeps edits and custom abilities, clamps each spent count to the new maximum (an edited maximum where there is one), drops pools that no longer exist, and clears concentration if that ability is gone. Re-import is offered only for a character that has a D&D Beyond ID. For the character that is open, the play state in memory is the newest copy and is the one clamped and kept.
 
 ## 7. Sheet maths
 
@@ -243,7 +334,7 @@ If IndexedDB is unavailable (private browsing, quota), the app says so and keeps
 
 Not calculated: effects that exist only in description text, hit points, conditions, and multiclass characters.
 
-**Every calculated number can be overridden.** Overrides live in `characters.number_overrides` (sheet-level numbers) and `ability_overlays` (per-ability values).
+**A wrong number can be corrected where it matters most.** From milestone 3 the player can replace any ability's roll: the attack bonus and damage, the save and its DC, or the dice (section 5.4). A replaced roll is fixed text and does not follow a level-up; the row is marked "edited" and can be put back to the imported value. Overriding the sheet's own numbers (skills, saving throws, initiative, Armor Class, spell attack bonus and spell save DC) is not built in this version; see section 16.
 
 ## 8. Turn tracking and hard rules
 
@@ -254,6 +345,7 @@ Not calculated: effects that exist only in description text, hit points, conditi
 - When more than one slot level could pay for a spell, Use asks which. When only one could, it spends that one without asking.
 - An ability with no timing to spend, no cost and no concentration is informational and has no Use button.
 - In the Explore view, Use deducts the cost and sets concentration but leaves the turn alone, and the one-slot-per-turn rule is not checked.
+- Use and the manual controls are disabled until the character's saved play state has loaded, so an early tap cannot overwrite it.
 
 **Start my turn:** resets Action, Bonus Action, Reaction and `slotSpentThisTurn`.
 
@@ -322,9 +414,9 @@ Both views are phone first. Each is one scrolling page.
 - Resources: this character's pools as chips with tappable pips.
 - A banner naming the current concentration effect, with a control to end it.
 - Suggested turn card with reason and thumbs up or down; swipe for the next plan (milestone 4).
-- Abilities grouped by Action, Bonus Action, Reaction, "No action needed" (timing `free`, for example Action Surge; collapsed) and "Other" (timing `unknown`; shown only when not empty). Abilities that take a minute or more are not listed. Each row has the name, a cost label, tags, a plain-English roll line and a Use button. A drag handle is added in milestone 3.
+- Abilities grouped by Action, Bonus Action, Reaction, "No action needed" (timing `free`, for example Action Surge; collapsed) and "Other" (timing `unknown`; shown only when not empty). Abilities that take a minute or more are not listed. Each row has the name, a cost label, tags, a plain-English roll line and a Use button. An edited row also carries the label "edited".
 - A group whose timing is spent dims but stays visible.
-- Two rows with the same name are told apart by their cost label ("free cast, 3 left" and "pact slot").
+- Two rows with the same name are told apart by their cost label ("free cast, 3 left" and "pact slot"). Where two rows on a sheet share a name, the kind of cost ("free cast", "pact slot") is also part of each row's accessible name and of its buttons', so a screen reader can tell them apart.
 - A weapon with a charge pool shows the pool as pips on its row.
 - The Action group states the number of attacks when it is more than one. Using any weapon spends the Action once; attacks within the Action are not counted.
 - A collapsed "Anyone can do this" group for the universal actions. They use the normal row, so Use on Dash spends the Action.
@@ -352,41 +444,110 @@ Both views are phone first. Each is one scrolling page.
 - The same resource chips as Combat.
 - Skill checks with the full roll, proficient skills first and the rest folded, with inline notes.
 - Saving throws in the same format.
-- Abilities tagged utility, social or movement, rituals, and anything taking a minute or more. No turn tracker; Use still deducts resources. An untagged ability with Action, Bonus Action or Reaction timing appears in Combat only, until milestone 3 lets the player choose.
+- Abilities tagged utility, social or movement, rituals, and anything taking a minute or more. No turn tracker; Use still deducts resources. An untagged ability with Action, Bonus Action or Reaction timing appears in Combat only, unless the player ticks Explore in its editor.
 - "Keep in mind".
 - Short Rest and Long Rest buttons.
 
 ### 10.3 Shared behaviour
 
 - Tapping a row opens the full description. Descriptions are HTML from the import and are sanitised to a small set of formatting tags before display.
-- From milestone 3, the opened row also has the edit controls: timing, uses, tags, which views it appears in, hide.
-- Drag and drop reorders within a group; each view keeps its own order (milestone 3).
-- "Add to list" creates a custom ability (milestone 3).
-- Hidden abilities move to a "Hidden" drawer and can be restored (milestone 3).
+- Dialogs (the slot choice and the editors) are `<dialog>` elements: focus moves into them, stays inside them, and Escape closes them. A yes-or-no question (delete, sign out with unsynced changes) uses the browser's own confirm box.
 
-### 10.4 Other screens
+### 10.4 Editing and arranging (milestone 3)
 
-- **Character list** (home): saved characters with class, level and import date; add, re-import and delete.
+Playing and arranging are separate, so that nobody moves or edits a row by accident in the middle of a fight.
+
+**While playing,** rows look as section 10.1 describes. The opened row shows the description and one extra button, "Edit", which opens the editor for that ability.
+
+**The editor** is a dialog with:
+
+- Timing: Action, Bonus Action, Reaction, No action needed, Takes a minute or more, Passive.
+- Limited uses: off, or a maximum and a reset (Short Rest, Long Rest, never). Not shown for an ability that costs a spell slot.
+- Tags: the nine tags as toggles.
+- Shown in: Combat and Explore tick boxes, starting from where the app put the ability. A box the player has not set keeps following the app's rule as they change the timing and tags, so giving an ability the Utility tag ticks Explore by itself.
+- Roll: none, an attack (bonus and damage), a save (ability, DC and damage), damage only, or dice only. Numbers are typed in.
+- Hide, and "Back to imported", which removes every edit to that ability.
+
+**"Edit list"** is a button at the bottom of each view. It switches the view into arranging:
+
+- Each row shows a drag handle, "Move up" and "Move down" buttons, Edit and Hide, and no Use button. The two buttons do what dragging does, so arranging never requires a drag.
+- Dragging moves a row within its own group. Moving an ability to another group is done by changing its timing in the editor.
+- Combat and Explore each keep their own order. The first drag in a group fixes that group's order as shown; an ability that arrives later goes to the end of its group.
+- A "Hidden" drawer lists hidden abilities, each with Restore.
+- "Add an ability" opens the editor with three more fields: a name, a plain-text description, and a concentration tick box. Its cost is nothing, limited uses, or a spell slot of a chosen level. A custom ability can also be deleted from its editor.
+- "Done" returns to playing.
+
+Hide, order and edit work on any row, including the universal actions. The universal actions' own text does not refer to where other rows are.
+
+### 10.5 Other screens
+
+- **Sign in:** one button, "Continue with Discord", and the link to About. Shown whenever nobody is signed in on the device. It says so when sign-in cannot start, and warns when a built site has no account settings.
+- **Waiting for approval:** shown to a signed-in player who is not approved. It names the account, and has "Check again" and "Sign out". After "Check again" it says "Still waiting." if nothing has changed. Until the account has said who the player is, the same screen reads "Checking your account" with "Try again". "Sign out" asks first if the device holds anything the account has not been sent.
+- **Character list** (home): the player's characters with class, level and import date; add, re-import and delete. Deleting says that the character is removed from the account and from every device. A table admin also sees a "Table" section listing every other character with its owner's name. One line shows the sync state: "Saved to your account", "Waiting to sync", "Sign in again to sync" (with a "Sign in" button), or "Your account has ten characters. Delete one so the rest can sync." The screen has "Sign out", which asks before discarding changes that have not synced, and for a table admin a link to Players. A character whose sheet cannot be built still has a card, so that it can be re-imported or deleted.
+- **Players** (table admin only): the people waiting, each with Approve, and the approved players, each with Remove access. An admin cannot remove their own access.
 - **Import:** see section 6.
 - **About:** the attribution and statement in section 13.
+- **Character:** if a character cannot be opened, the screen says so and links back to the list.
 
 ## 11. Accounts and security
 
-- Sign-in by emailed link through Supabase Auth. No passwords.
-- Open sign-up is disabled; the DM invites players by email.
-- Row-level security on every table: a user can read and write rows for characters they own. A user with `is_table_admin` can read and write all characters.
-- The Edge Function is the only code that calls D&D Beyond, and it cannot be used to fetch arbitrary URLs.
+**Sign-in**
 
-## 12. Offline behaviour
+- Sign-in is by Discord, through Supabase Auth. The app sends no email and stores no password. Sign-in returns to the site with a `code` in the query string, which does not collide with the hash routes.
+- Sign-in is required. A device with nobody signed in shows only the sign-in screen and About.
+- The device remembers who is signed in (section 5.3), so the app opens from the device's copy without a connection. If the session can no longer be renewed, the app keeps working from the device and shows "Sign in again to sync". Having no connection when the app opens is not a session that has ended: the app says the changes are waiting, and syncs when the connection returns.
+- **Signing out** removes the device's copy of every character. If changes are still waiting to sync, the app says so and asks before discarding them.
+- Signing out waits for a sync that is running, so that nothing it fetched is left on the device.
+- If a different account signs in on a device whose earlier session had ended, the earlier account's copy is removed from the device, including any changes it had not yet sent. The device cannot send them without that account's session.
 
-- From milestone 2, characters and play state are stored on the device (section 5.3), so a saved character opens without a connection once the page itself has loaded.
-- The PWA caches the app shell and the last-loaded characters (milestone 5).
-- Resource changes and usage events are written locally first and synced when a connection is available.
-- If one character is open on two devices, the latest write wins. No conflict resolution in this version.
+**Approval**
+
+- A first sign-in creates a profile that is not approved. An unapproved player sees only the waiting screen.
+- A table admin approves players, and removes access, on the Players screen. Removing access keeps the player's characters.
+- A player who stops being a table admin loses the other players' characters from their device at the next sync.
+- The first admin is made by hand: the owner signs in once, then marks their own profile approved and admin with one SQL statement in the Supabase dashboard. Nothing in the app can grant admin.
+
+**Row-level security** is on for every table.
+
+| Who | Can |
+|---|---|
+| Not signed in | Nothing |
+| Signed in, not approved | Read their own profile |
+| Approved player | Read and write their own characters and those characters' items. Ten live characters |
+| Table admin | The same for every character; read every profile; approve and remove access |
+
+- No policy lets anyone write `profiles`. Approval goes through one database function, `set_player_approved`, which checks that the caller is an admin and is not changing their own row.
+- A character's owner is whoever created it and cannot be changed. An admin can edit another player's character but cannot create one in their name.
+- An item can be read or written only while its character is visible to the caller and not deleted.
+- `import_log` has no policies; only `record_import` touches it.
+
+**The Edge Function** is the only code that calls D&D Beyond, it cannot be used to fetch arbitrary URLs, and it serves only signed-in, approved players within the rate limit (section 6).
+
+## 12. Offline behaviour and syncing
+
+- Characters, play state and edits are stored on the device (section 5.3), so a saved character opens without a connection once the page itself has loaded. Every screen reads from the device's copy.
+- The PWA caches the app shell (milestone 5).
+
+**Syncing (milestone 3)**
+
+- Every change is saved on the device first, marked dirty, and sent to the account in the background.
+- **Sending:** about two seconds after a change, and again when a connection returns. A record stops being dirty once the account has answered, whether it accepted the change or already held a newer one.
+- **Fetching:** at sign-in, when the app opens, when the player switches back to it, and every 30 seconds while it is on screen. The device asks for every character and item with a `rev` after the last one it saw. The account answers a page at a time, and a call that gets no answer within 20 seconds counts as no connection.
+- **Merging a fetched record:** it replaces the device's copy unless the device's copy is dirty and newer. If the character on screen changed, the screen updates. A change the player makes to what is spent while a fetch is running, or while its result is being read back, wins over what was fetched; a change to the turn alone does not count, because the turn never syncs.
+- **What syncs:** characters, and the `play`, `edit`, `custom` and `order` items. Turn state does not.
+- **First sign-in on a device:** characters already on it are uploaded (section 5.3). Where the account already has the same character, the ordinary rule decides each record: the newer import, and whichever play state changed last. Where the device itself already holds the character under the account's ID, the two copies are merged the same way, record by record.
+
+**Conflicts:** the later change wins, item by item, and the earlier one is lost without a message. Edits to different abilities are different items, so both survive. The whole of what is spent is one item, and so is each view's order. "Later" goes by the clock of the device that made the change; the server never accepts a time in the future.
+
+**Deleting** a character removes it from the account and, at their next fetch, from every device that has it.
+
+Usage events (milestone 4) will be written locally first and sent in the same way.
 
 ## 13. Hosting and licensing
 
 - Static frontend on Cloudflare Pages. Supabase free tier for auth, database and the Edge Function.
+- Sign-in needs a Discord application whose ID and secret are entered in the Supabase dashboard by the owner. The database is created from the SQL files in `supabase/migrations`.
+- Supabase pauses a free project after seven days of low activity and the owner resumes it from the dashboard. While it is paused the app works from each device's copy; signing in on a new device, syncing and import by link wait until it is resumed.
 - An About screen carries the SRD 5.2 attribution required by CC-BY-4.0 and states that the app is not affiliated with D&D Beyond or Wizards of the Coast.
 - Ability descriptions shown in the app come only from the signed-in player's own imported sheet. The app ships no non-SRD rules text.
 
@@ -396,7 +557,11 @@ Both views are phone first. Each is one scrolling page.
 - **Generality:** the converter is also tested with synthetic input containing unknown activation types, unknown reset types, unknown tags and features with no structure at all. Each must produce a displayable ability and never an error.
 - **Coverage gap:** Druid, Monk, Paladin and Ranger have curated tags but no real fixture yet. Their maths is unverified against a real sheet until a fixture for each is added.
 - **Rules and suggestions:** table-driven tests. A character plus a turn state goes in; expected availability, ordering and plans come out. For example, for the level 3 Warlock: Hex plus Eldritch Blast is legal; Hex plus Arms of Hadar is not (two slots); a free Misty Step plus Arms of Hadar is legal.
-- **Web app:** component tests for the Use, undo, Start my turn and rest flows.
+- **Web app:** component tests for the Use, undo, Start my turn and rest flows, and from milestone 3 for sign-in, approval, editing, arranging and custom abilities, all against `memoryRemote`.
+- **Access rules:** the SQL in `supabase/migrations` is run inside the test suite on PGlite, a Postgres that runs in-process, with a small stand-in for Supabase's `auth` schema. Tests act as an unapproved player, an approved player and a table admin, and cover the ten-character limit, the write-ordering trigger and the import rate limit. No Docker and no live project is needed.
+- **Syncing:** two in-memory devices and one `memoryRemote`. Tests cover sending, fetching, the later change winning, deletion reaching the other device, and first sign-in upload. `memoryRemote` and the SQL trigger are tested against the same list of cases so that they cannot drift apart.
+- **Edits:** table-driven tests of `applyEdits`, and synthetic converter input for each key collision of section 5.1, since no fixture has one.
+- **Not covered by automated tests:** Discord sign-in against the real services. The owner checks it after deploying.
 
 ## 15. Milestones
 
@@ -404,7 +569,9 @@ Each milestone is usable on its own and gets its own implementation plan.
 
 1. **Import and sheet maths**, verified against every available fixture (eight characters across eight classes as of 2026-11-11). Curated tags for all twelve classes are written in milestone 4, where they are first used.
 2. **Both views with turn and resource tracking**, stored on the device only. Includes the import Edge Function, which the browser needs to fetch a character, the Supabase project that hosts it, and the first deployment of the static site. No accounts, overlays, suggestions or usage events.
-3. **Accounts, saved characters and overlays** (edit, reorder, hide, add custom).
+3. **Accounts, saved characters and overlays** (edit, reorder, hide, add custom). One plan in two parts, each with its own pull request:
+   - **Part A, accounts and syncing:** the version 2 device storage, the database and its access rules, Discord sign-in, approval and the Players screen, syncing, the table admin's "Table" section, and the import function's access check and limits. Usable on its own: characters are backed up and follow the player between devices.
+   - **Part B, overlays:** the ability editor, "Edit list" with drag and drop, hiding, custom abilities, and re-import with edits.
 4. **Suggestions:** turn plans, situation chips, feedback and usage learning.
 5. **Offline support and install to home screen.**
 
@@ -417,6 +584,11 @@ Each milestone is usable on its own and gets its own implementation plan.
 - Multiclass characters.
 - Public sign-up, billing and moderation.
 - A dashboard for usage and feedback data.
+- Overriding the sheet's own numbers: skills, saving throws, initiative, Armor Class, spell attack bonus and spell save DC. It needs an edit screen for the sheet and rules for knock-on effects (a new spell save DC changes every spell's roll line). Until then a wrong ability roll is fixed in that ability's editor.
+- A second sign-in provider such as Google. Adding one is a dashboard setting and one more button.
+- Live updates between devices. A change made elsewhere arrives at the next fetch, within 30 seconds.
+- A conflict screen. The later change wins (section 12).
+- An admin creating a character for another player, or moving a character between players.
 
 The ability key and overlay model leave room for the first three without rework.
 
@@ -426,8 +598,13 @@ The ability key and overlay model leave room for the first three without rework.
 |---|---|
 | The unofficial endpoint changes or is closed | All D&D Beyond handling is isolated in `ddb-import` and one Edge Function. Saved characters keep working from stored JSON. A PDF or manual importer can target the same `Character` format |
 | A public release would lean on an unofficial endpoint and D&D Beyond's terms | Out of scope now; must be revisited before any public launch |
-| Homebrew authored as text only | Tag editor, per-number overrides and custom abilities cover every case by hand |
-| Sheet maths disagrees with D&D Beyond | Fixture tests against every available real sheet; every number is overridable |
+| Homebrew authored as text only | The ability editor (timing, uses, tags, roll) and custom abilities cover every case by hand |
+| Sheet maths disagrees with D&D Beyond | Fixture tests against every available real sheet; any ability's roll can be replaced. The sheet's own numbers cannot be overridden yet (section 16) |
+| Two people change the same item at once and one change is lost silently | Accepted. Items are small (one ability's edits, one view's order), so it needs the same item on two devices within one fetch interval |
+| A table admin spends a player's resources by accident while their character is open | Accepted, to avoid a read-only mode. Undo reverses the slip |
+| Anyone with a Discord account can sign in and wait for approval | Accepted. An unapproved account can read only its own profile and can call nothing |
+| Supabase pauses an idle free project | The app works from each device's copy until the owner resumes it (section 13) |
+| Discord sign-in leaves the site and comes back, which may not return to an app installed to an iPhone's home screen | Not verified. To be checked in milestone 5, before install is offered |
 | Players must set sheets to Public | The import screen explains it and recognises the 403 response |
 | Until milestone 3 the Edge Function has no signed-in check | Accepted for milestone 2. It accepts only a numeric ID, fetches only the character-service URL, and returns only what a public sheet already exposes to anyone. It answers only listed origins. Milestone 3 adds the signed-in check |
 | Until milestone 3 a character and its play state live only in the browser's storage, which a browser may clear. Safari removes a site's stored data after seven days of browser use without a visit to it | Accepted for milestone 2. Re-importing restores the character; only what was spent is lost. Accounts (milestone 3) and the installed app (milestone 5) remove the limit |

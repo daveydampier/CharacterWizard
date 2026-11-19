@@ -11,6 +11,7 @@ export default defineConfig({
             'packages/*/test/**/*.test.ts',
             'scripts/**/*.test.ts',
             'supabase/functions/**/*.test.ts',
+            'supabase/tests/**/*.test.ts',
           ],
         },
       },

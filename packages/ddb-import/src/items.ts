@@ -27,16 +27,35 @@ function extraDamage(def: Raw): DamagePart[] {
     .map((m) => ({ dice: str(m.dice.diceString), type: str(m.subType) || null }));
 }
 
+/**
+ * The key of every equipped inventory entry, by its position in the inventory. The first equipped
+ * copy of an item is `item:<definitionId>:base`; later copies get `#2`, `#3`.
+ */
+function itemKeys(d: Raw): Map<number, string> {
+  const copies = new Map<number, number>();
+  const keys = new Map<number, string>();
+  arr(d.inventory).forEach((item, index) => {
+    if (item?.equipped !== true) return;
+    const id = num(obj(item.definition).id) ?? 0;
+    const count = (copies.get(id) ?? 0) + 1;
+    copies.set(id, count);
+    keys.set(index, count === 1 ? `item:${id}:base` : `item:${id}:base#${count}`);
+  });
+  return keys;
+}
+
 export function convertWeapons(d: Raw): Weapon[] {
   const pact = pactWeaponInventoryIds(d);
+  const keys = itemKeys(d);
   const out: Weapon[] = [];
-  for (const item of arr(d.inventory)) {
-    if (item?.equipped !== true) continue;
+  for (const [index, item] of arr(d.inventory).entries()) {
+    const key = keys.get(index);
+    if (key === undefined) continue;
     const def = obj(item.definition);
     // Granted modifiers only apply when the item is attuned, if it needs attunement.
     const effective = !(def.canAttune === true && item.isAttuned !== true);
     const shared = {
-      key: `item:${num(def.id) ?? 0}:base`,
+      key,
       name: str(def.name),
       magicBonus: effective ? grantedBonus(def, 'magic') : 0,
       isPactWeapon: pact.has(String(item.id)),
@@ -78,15 +97,16 @@ export function convertWeapons(d: Raw): Weapon[] {
 /** Every active item (equipped, and attuned if attunable) that has a real limited-use pool. */
 export function convertChargedItems(d: Raw): ChargedItem[] {
   const active = activeItemIds(d);
+  const keys = itemKeys(d);
   const out: ChargedItem[] = [];
-  for (const item of arr(d.inventory)) {
+  for (const [index, item] of arr(d.inventory).entries()) {
     const def = obj(item?.definition);
     const id = num(def.id);
+    const key = keys.get(index);
     const uses = limitedUseFrom(item?.limitedUse);
-    if (id === null || !active.has(id) || !uses) continue;
-    const key = `item:${id}:base`;
-    // Two copies of one item share a key; only the first is kept.
-    if (out.some((i) => i.key === key)) continue;
+    // An attunable item that is not attuned has no pool, equipped or not.
+    const attuned = !(def.canAttune === true && item?.isAttuned !== true);
+    if (id === null || key === undefined || !active.has(id) || !attuned || !uses) continue;
     out.push({ key, name: str(def.name), uses });
   }
   return out;

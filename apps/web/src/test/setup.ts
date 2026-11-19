@@ -7,4 +7,6 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   window.location.hash = '';
+  // Local development's stand-in account remembers its sign-in here.
+  window.localStorage.clear();
 });

@@ -11,4 +11,5 @@ export * from './notes';
 export * from './universal';
 export * from './sheet';
 export * from './play';
+export * from './normalise';
 export * from './views';
