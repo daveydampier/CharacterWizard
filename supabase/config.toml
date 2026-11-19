@@ -1,4 +1,5 @@
 project_id = "character-wizard"
 
 [functions.import-character]
-verify_jwt = true
+# The function checks the caller itself, through the database (see _shared/import-handler.ts).
+verify_jwt = false
