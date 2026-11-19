@@ -3,9 +3,10 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { loadRaw } from '../../../../test-utils/fixtures';
 import { ErrorBoundary } from '../App';
+import { fetchCharacter } from '../import/client';
 import { memoryStorage, type AppStorage } from '../storage';
 import { useStore } from '../store';
-import { seed, testRemote } from '../test/helpers';
+import { seed, testRemote, testServer } from '../test/helpers';
 import { renderAt } from '../test/render';
 
 const json = (status: number, body: unknown) =>
@@ -16,6 +17,9 @@ const stubFetch = (response: () => Response | Promise<Response>) => {
   vi.stubGlobal('fetch', mock);
   return mock;
 };
+
+/** The test player's device on an account that sends imports to the import service, as local development does. */
+const importingRemote = () => testRemote(testServer({ importer: (ddbId) => fetchCharacter(ddbId) }));
 
 async function emptyApp(storage: AppStorage = memoryStorage()) {
   await useStore.getState().init(storage, testRemote());
@@ -55,7 +59,7 @@ describe('Home screen', () => {
   });
 
   it('re-imports a character by its D&D Beyond ID', async () => {
-    await seed('vlad');
+    await seed('vlad', memoryStorage(), importingRemote());
     renderAt({ name: 'home' });
     const fetchMock = stubFetch(() => json(200, { status: 'ok', raw: loadRaw('vlad') }));
     await userEvent.click(screen.getByRole('button', { name: 'Re-import' }));
@@ -65,7 +69,7 @@ describe('Home screen', () => {
   });
 
   it('keeps the saved copy when a re-import fails', async () => {
-    await seed('vlad');
+    await seed('vlad', memoryStorage(), importingRemote());
     renderAt({ name: 'home' });
     stubFetch(() => json(403, { status: 'private' }));
     await userEvent.click(screen.getByRole('button', { name: 'Re-import' }));

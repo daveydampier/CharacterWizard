@@ -1,7 +1,7 @@
 import type { Ability, PlayState } from '@cw/model';
 import { normalisePlayItem, normaliseTurn } from '@cw/rules';
 import { loadRaw, type Slug } from '../../../../test-utils/fixtures';
-import { memoryServer, type MemoryRemote, type MemoryServer } from '../remote/memory';
+import { memoryServer, type MemoryRemote, type MemoryServer, type MemoryServerOptions } from '../remote/memory';
 import type { Remote } from '../remote/types';
 import { STATE_KEY, memoryStorage, type AppStorage, type StoredCharacter } from '../storage';
 import { useStore } from '../store';
@@ -17,8 +17,8 @@ export function rawWithId(slug: Slug, ddbId: number): any {
 export const TEST_USER = 'user-test';
 
 /** An in-memory account that already knows the test player. */
-export function testServer(): MemoryServer {
-  const server = memoryServer();
+export function testServer(options?: MemoryServerOptions): MemoryServer {
+  const server = memoryServer(options);
   server.addUser(TEST_USER, 'Tess', { approved: true });
   return server;
 }

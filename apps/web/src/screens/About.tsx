@@ -24,8 +24,9 @@ export function AboutScreen() {
       </p>
       <h2 className="mt-5 font-medium">Your data</h2>
       <p className="mt-2 text-sm">
-        Your characters and what you have spent are stored on this device only. Ability descriptions come from
-        your own imported sheet.
+        Your characters, what you have spent and your edits are kept on this device and in your account, so
+        that they follow you to another device. Signing out removes them from this device. Ability descriptions
+        come from your own imported sheet.
       </p>
     </main>
   );

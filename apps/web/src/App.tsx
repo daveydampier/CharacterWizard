@@ -4,6 +4,7 @@ import { AboutScreen } from './screens/About';
 import { CharacterScreen } from './screens/Character';
 import { HomeScreen } from './screens/Home';
 import { ImportScreen } from './screens/Import';
+import { PlayersScreen } from './screens/Players';
 import { SignInScreen } from './screens/SignIn';
 import { WaitingScreen } from './screens/Waiting';
 import { useStore } from './store';
@@ -65,6 +66,7 @@ function Screen() {
   if (!session.profile?.approved) return <WaitingScreen />;
   switch (route.name) {
     case 'import': return <ImportScreen />;
+    case 'players': return <PlayersScreen />;
     case 'character': return <CharacterScreen id={route.id} view={route.view} />;
     default: return <HomeScreen />;
   }
