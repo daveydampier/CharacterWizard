@@ -7,6 +7,9 @@ const ENV = { VITE_SUPABASE_URL: 'https://abc.supabase.co', VITE_SUPABASE_KEY: '
 
 interface Answer { data: unknown; error: { code?: string; message?: string } | null; status?: number }
 
+/** What supabase-js's auth calls resolve with when they fail. They do not throw. */
+interface AuthProblem { message?: string; status?: number }
+
 /**
  * A stand-in for the supabase-js client that records each data call as a line of text
  * ("from characters select * gt rev 5 order rev") and answers with whatever the test queued.
@@ -41,8 +44,8 @@ function fakeClient(session: { userId: string; token: string } | null = { userId
       authListener = listener;
       return { data: { subscription: { unsubscribe: () => undefined } } };
     }),
-    signInWithOAuth: vi.fn(async (_options: unknown) => ({ data: {}, error: null })),
-    signOut: vi.fn(async (_options: unknown) => ({ error: null })),
+    signInWithOAuth: vi.fn(async (_options: unknown): Promise<{ data: unknown; error: AuthProblem | null }> => ({ data: {}, error: null })),
+    signOut: vi.fn(async (_options: unknown): Promise<{ error: AuthProblem | null }> => ({ error: null })),
   };
 
   const client = {
@@ -103,6 +106,26 @@ describe('supabaseRemote: who is signed in', () => {
     const { fake, remote } = await started();
     await remote.signOut();
     expect(fake.auth.signOut).toHaveBeenCalledWith({ scope: 'local' });
+  });
+
+  it('rejects when sign-in cannot start, so the screen can say so', async () => {
+    const { fake, remote } = await started(fakeClient(null));
+    fake.auth.signInWithOAuth.mockResolvedValueOnce({
+      data: {}, error: { message: 'Unsupported provider: provider is not enabled', status: 400 },
+    });
+    await expect(remote.signIn()).rejects.toMatchObject({ name: 'RemoteError', kind: 'other' });
+  });
+
+  it('rejects as offline when sign-in cannot reach the account', async () => {
+    const { fake, remote } = await started(fakeClient(null));
+    fake.auth.signInWithOAuth.mockResolvedValueOnce({ data: {}, error: { message: 'TypeError: Failed to fetch', status: 0 } });
+    await expect(remote.signIn()).rejects.toMatchObject({ name: 'RemoteError', kind: 'offline' });
+  });
+
+  it('rejects when signing out fails', async () => {
+    const { fake, remote } = await started();
+    fake.auth.signOut.mockResolvedValueOnce({ error: { message: 'boom', status: 500 } });
+    await expect(remote.signOut()).rejects.toMatchObject({ name: 'RemoteError', kind: 'other' });
   });
 
   it('refuses data calls while signed out, without asking', async () => {

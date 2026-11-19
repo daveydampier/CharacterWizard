@@ -60,21 +60,27 @@ export function supabaseRemote(client: SupabaseClient, env: ImportEnv): Remote {
         onUser(id);
       };
       // Reads the session kept on this device, first finishing a sign-in that has just come back.
+      // If that fails (the session cannot be read, or cannot be renewed), nobody is signed in as
+      // far as the account is concerned. The store keeps its own record of who was.
       const { data } = await client.auth.getSession();
       tell(data.session?.user.id ?? null);
       client.auth.onAuthStateChange((_event, session) => tell(session?.user.id ?? null));
     },
 
     async signIn() {
-      await client.auth.signInWithOAuth({
+      // supabase-js reports a sign-in that cannot start (the provider is off, the address is not
+      // allowed, there is no connection) by resolving with an error, not by throwing.
+      const { error } = await client.auth.signInWithOAuth({
         provider: 'discord',
         options: { redirectTo: `${window.location.origin}${window.location.pathname}` },
       });
+      if (error) throw failure({ data: null, error, status: error.status });
     },
 
     async signOut() {
       // This device only: the player's other devices stay signed in.
-      await client.auth.signOut({ scope: 'local' });
+      const { error } = await client.auth.signOut({ scope: 'local' });
+      if (error) throw failure({ data: null, error, status: error.status });
     },
 
     async profile() {
