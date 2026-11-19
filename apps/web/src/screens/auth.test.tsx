@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { loadRaw } from '../../../../test-utils/fixtures';
 import { memoryServer, type MemoryServer } from '../remote/memory';
-import type { Remote } from '../remote/types';
+import { RemoteError, type Remote } from '../remote/types';
 import type { Route } from '../router';
 import { memoryStorage, type AppStorage } from '../storage';
 import { useStore } from '../store';
@@ -95,6 +95,44 @@ describe('Sign-in screen', () => {
     expect(screen.getByRole('button', { name: 'Continue with Discord' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Continue as test player' })).toBeNull();
     expect(screen.queryByText('Local development: no account is used.')).toBeNull();
+  });
+
+  it('says so when sign-in cannot start, and lets the player try again', async () => {
+    let fail = true;
+    await signedOutApp((remote) => ({
+      ...remote,
+      async signIn() {
+        if (fail) throw new RemoteError('other', 'provider is not enabled');
+        await remote.signIn();
+      },
+    }));
+    renderAt({ name: 'home' });
+    await userEvent.click(screen.getByRole('button', { name: 'Continue as test player' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent("Couldn't start sign-in. Check your connection, then try again.");
+    expect(screen.getByRole('button', { name: 'Continue as test player' })).toBeEnabled();
+    fail = false;
+    await userEvent.click(screen.getByRole('button', { name: 'Continue as test player' }));
+    expect(await screen.findByRole('heading', { name: 'Your characters' })).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('warns on a production build that has no account settings', () => {
+    render(<SignInScreen local production />);
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'This site was built without its account settings, so nothing here is saved to an account. Tell whoever runs the site.',
+    );
+    expect(screen.queryByText('Local development: no account is used.')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Continue as test player' })).toBeEnabled();
+  });
+
+  it('shows no warning in local development, nor on a build that has an account', () => {
+    const dev = render(<SignInScreen local production={false} />);
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.getByText('Local development: no account is used.')).toBeInTheDocument();
+    dev.unmount();
+    render(<SignInScreen local={false} production />);
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Continue with Discord' })).toBeInTheDocument();
   });
 });
 
