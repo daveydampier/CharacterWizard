@@ -33,7 +33,7 @@ This repository contains the import, the sheet maths, the turn engine, the web a
 
 The site is static and is built with `pnpm build` into `apps/web/dist`. It needs two values at build time, both public: `VITE_SUPABASE_URL` and `VITE_SUPABASE_KEY` (the project's publishable key). `apps/web/.env.example` lists them.
 
-The database is created from `supabase/migrations` with `pnpm dlx supabase db push`, and the import function is deployed with `pnpm dlx supabase functions deploy import-character`. The function answers only the origins listed in its `ALLOWED_ORIGINS` secret, and only signed-in, approved players.
+The database is created from `supabase/migrations` with `pnpm dlx supabase db push --remote`, and the import function is deployed with `pnpm dlx supabase functions deploy import-character --use-api`. The function answers only the origins listed in its `ALLOWED_ORIGINS` secret, and only signed-in, approved players.
 
 Never commit a Supabase address, a key, a Discord client secret or a database password.
 

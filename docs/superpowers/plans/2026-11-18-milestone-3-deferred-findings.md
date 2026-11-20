@@ -94,9 +94,27 @@ Left, smallest first:
 - **A different account on the same device.** If a different account signs in on a device whose earlier session had ended, the earlier account's copy is removed from the device, including any changes it had not yet sent. The device cannot send them without that account's session, and refusing the second sign-in would need a screen state the design does not have. It takes a shared device, two Discord accounts, and unsent changes made after the first session ended. The spec says so (section 11).
 - **A fetched change that cannot be read back.** The character stays open and the player's next change is written over the fetched copy, as any later local change would be. Closing the character in the middle of play over a read error would be worse.
 
+## Task 13: done
+
+The owner ran Task 13 on 2026-11-19, and the Part A pull request is merged.
+
+Checked from the command line after the owner's steps:
+
+- The database script is applied to the Supabase project.
+- The import function is deployed with the platform's own token check off. Not signed in, it answers 401 with `{"status":"unauthorized"}`. It allows a request from the site's address and answers 403 to any other address.
+- The site is live on Cloudflare Pages, built with the project's address and publishable key.
+
+The owner's report on signing in with Discord, becoming the table admin (Step 8) and the device checks (Step 9): "ok tested and everything worked as expected". So Discord sign-in, the Supabase adapter and the database script all work against the real services. The owner was given Step 9's five checks and the offline start check, and has not yet said which of them were run.
+
+What Task 13's steps got wrong, found with Supabase CLI 3.2.0. The plan and the README are corrected:
+
+- `supabase db push` aims at a local database by default and fails without Docker. `supabase db push --remote` applies the script to the linked project.
+- `supabase functions deploy import-character --use-api` deploys without Docker.
+- Cloudflare's Create screen opens the form for importing a Worker (project name, build command, deploy command). Pages is under Create application, then Pages, then Connect to Git. The first Pages deployment "failed to start" and worked when retried.
+
 ## Not verified in milestone 3
 
-- Discord sign-in against the real services, the Supabase adapter against a live project, and the migration applied to a real project. Plan Task 13 (repository owner) covers all three. Remove this line when the owner reports that Task 13's checks passed.
+- Which of Task 13's device checks were run. The owner reported that everything worked, without saying which checks. Ask, then remove each line below that a check covers.
 - The app has not been opened on a real phone. The walk-throughs ran in a desktop browser at 375 by 812 against the in-memory account.
 - Whether Discord sign-in returns to an app installed to an iPhone's home screen. Milestone 5 must check before install is offered.
 - Whether a successful fetch from the character service redirects. An unknown ID answers 403 directly; the import function now follows no redirects.
