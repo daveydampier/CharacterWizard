@@ -1,7 +1,7 @@
 # Character Wizard: design
 
 Date: 2026-11-11
-Status: approved in conversation, awaiting written review. Milestone 2 decisions added 2026-11-11 (sections 4, 5, 6, 8, 10, 12, 15 and 17). Milestone 3 decisions added 2026-11-18 (sections 2, 4, 5, 6, 7, 10, 11, 12, 13, 14, 15, 16 and 17). Details settled by the Part A reviews added 2026-11-19 (sections 5.2, 5.3, 10.5, 11 and 12).
+Status: approved in conversation, awaiting written review. Milestone 2 decisions added 2026-11-11 (sections 4, 5, 6, 8, 10, 12, 15 and 17). Milestone 3 decisions added 2026-11-18 (sections 2, 4, 5, 6, 7, 10, 11, 12, 13, 14, 15, 16 and 17). Details settled by the Part A reviews added 2026-11-19 (sections 5.2, 5.3, 10.5, 11 and 12). The Features page added 2026-11-21 (sections 2, 4, 5, 10, 13, 14, 15, 16 and 17), approved in conversation and awaiting written review.
 
 ## 1. Purpose
 
@@ -29,6 +29,7 @@ The app is built for any D&D Beyond character, not for the characters used to te
 | Who may use it | Anyone can sign in with Discord. A new account can do nothing until a table admin approves it in the app |
 | Table admin | Can open and edit every character at the table, exactly as its owner can |
 | Edits | A player's changes are layered over the imported sheet by ability key and survive a re-import. Playing and arranging are separate modes |
+| Features | A third page, Features, lists every class and subclass feature, feat, species trait and option on the sheet. None of them is added to Combat or Explore by the app; the player chooses which ones are, feature by feature. Nothing is filtered out by name |
 | Play tracking | The app tracks the turn (Action, Bonus Action, Reaction) and limited-use resources (spell slots, feature uses). Hit points and conditions stay on D&D Beyond or paper |
 | Suggestion intelligence | Deterministic rules plus tags. No machine learning and no LLM in this version |
 | Homebrew | First-class. Every ability is tagged from one of three sources: imported data, curated SRD data, or user edits. The engine reads only tags |
@@ -104,7 +105,7 @@ Libraries arrive with the milestone that first uses them: supabase-js and dnd-ki
 
 The Edge Function's logic lives in `supabase/functions/_shared/import-handler.ts`. It is written against the web-standard `Request` and `Response` only, so Vitest tests it and the Vite dev server mounts the same handler at the same path.
 
-The web app routes by URL hash (`#/`, `#/import`, `#/about`, `#/players`, `#/c/{id}/combat`, `#/c/{id}/explore`), so the phone's back button works and static hosting needs no rewrite rules. A character ID is percent-encoded in the route.
+The web app routes by URL hash (`#/`, `#/import`, `#/about`, `#/players`, `#/c/{id}/combat`, `#/c/{id}/explore`, `#/c/{id}/features`), so the phone's back button works and static hosting needs no rewrite rules. A character ID is percent-encoded in the route.
 
 From milestone 3 the web app reaches Supabase only through one `Remote` interface: sign-in, profiles, sending changes, fetching changes and import. `supabaseRemote` implements it with supabase-js. `memoryRemote` implements the same rules in memory. Tests use it, and the dev server uses it when no Supabase address is configured, with a "Continue as test player" button, so local development still needs no Supabase project.
 
@@ -202,7 +203,7 @@ Curated entries are matched to imported features by D&D Beyond's definition ID w
 | `play` | `state` | `{ spent, concentrationKey }` |
 | `edit` | the ability key | an `AbilityEdit` (section 5.4) |
 | `custom` | the ability's `own:{uuid}` key | a `CustomAbility` (section 5.4) |
-| `order` | `combat` or `explore` | an array of ability keys |
+| `order` | `combat`, `explore` or `features` | an array of ability keys, or of feature keys for `features` |
 
 One table holds every kind, so syncing, conflict handling and the access rule are each written once. The database does not check the shape of `data`; the app checks and repairs every item when it reads it (section 5.3).
 
@@ -274,7 +275,7 @@ interface CustomAbility {
 interface CharacterEdits {
   abilities: Record<string, AbilityEdit>;   // by ability key
   custom: CustomAbility[];
-  order: { combat: string[]; explore: string[] };
+  order: { combat: string[]; explore: string[]; features: string[] };
 }
 ```
 
@@ -282,13 +283,64 @@ interface CharacterEdits {
 
 - **Timing, tags, roll:** replace the imported value. Edited tags set `tagSource` to `user`.
 - **Uses:** `{ max, reset }` changes the pool the ability already spends from, or gives an ability with no cost a pool under its own key and makes Use spend from it. `'none'` removes the cost. Not offered for an ability that costs a spell slot.
-- **inCombat, inExplore:** override which views list the ability. Unset, Combat lists every timing except `long`, and Explore lists what section 10.2 says. An ability forced into Combat whose timing has no group there is listed under "Other".
+- **inCombat, inExplore:** override which views list the ability. Unset, Combat lists every timing except `long`, and Explore lists what section 10.2 says. An ability forced into Combat whose timing has no group there is listed under "Other". A feature follows a different rule when unset (section 5.5).
 - **hidden:** the ability leaves both views and is listed in `sheet.hidden`. A pool is not shown as a resource chip when at least one ability uses it and all of them are hidden.
 - **order:** within any group, abilities whose key is in the view's list come first, in list order; the rest follow in sheet order.
 - **Custom abilities** are converted to `Ability` records with source `custom` and appended. Editing one rewrites its `custom` item; hiding it or changing its views uses an `AbilityEdit` under its key, like any other ability. Its description is plain text and is escaped before display.
 - The sheet records which keys carry an edit, so a row can show "edited".
 
 An edit whose ability is not on the sheet (an unequipped weapon, a feature lost on re-import) is kept and has no effect.
+
+### 5.5 Features (milestone 3)
+
+An ability is something the character can do. A feature is something the sheet says the character has: a class or subclass feature, a feat, a species trait, or an option chosen within one of those. Most features have no ability of their own (Danger Sense, Extra Attack, Darkvision), so before this section the app did not show them at all. Across the eight fixtures, each character has between 17 and 26 features with no ability.
+
+A feature is its own record type, kept in its own list beside the abilities.
+
+```ts
+interface Feature {
+  key: string;               // stable across re-imports
+  name: string;
+  origin: 'class' | 'subclass' | 'feat' | 'species' | 'background';
+  originName: string;        // the class, subclass, species or background by name; empty for a feat
+  level: number | null;      // the class level that grants it; null outside a class
+  parentKey: string | null;  // for an option, the feature that offers it
+  description: string;       // from the player's own sheet
+  playKeys: string[];        // the abilities the sheet attaches to this feature
+}
+```
+
+**Where features come from:** `ddb-import` reads them from the raw JSON when the character is loaded, as it does abilities (section 6, step 3). A character imported before this section existed shows its features without a re-import, and nothing new is stored or synced.
+
+| On the sheet | Becomes |
+|---|---|
+| A class feature whose required level is at most the character's level in that class | `class`, or `subclass` when the feature belongs to the subclass's own definition |
+| A feat | `feat` |
+| A species trait | `species` |
+| An option (class, feat or species) | A feature with the origin of the feature it is attached to, and that feature's key in `parentKey` |
+| The background's own feature | `background`, and only when the background names a feature and grants no feats. A feat that a background grants is on the sheet's list of feats, and is listed there |
+
+A class feature carries the ID of the class or subclass that defines it, which is how the two are told apart here. Action rows do not carry it, which is why section 5.1 gives both the source `class`. An option whose parent is not listed takes its origin from the list it is in: `class` and the first class, `feat`, or `species`.
+
+**Nothing is filtered:** every entry in those lists is a feature. The converter keeps no list of names to leave out, so bookkeeping entries (Ability Score Improvement, Size, Languages) are listed with the rest, and the player hides them (Part B). D&D Beyond's own "hide in sheet" flag is not used: it marks one or two entries per character, and among them are Rage and Innate Sorcery.
+
+**Feature key:** `feature:{entityTypeId}:{id}`, from D&D Beyond's own IDs. A feature with a name and no ID is keyed by a hash of its origin and name. Two features with the same key follow the rule for actions in section 5.1: the first keeps it and each later one gets `#2`, `#3` and so on. In the eight fixtures every feature has an ID and no two share a key.
+
+**Description:** the entry's full description, or its short one where the full one is empty. Section 13 applies.
+
+**Play rows:** `playKeys` holds the keys of the abilities, actions and granted spells alike, whose granting component on the sheet is this feature. The match is on D&D Beyond's component type and ID, never on a name. In the eight fixtures, 54 actions belong to a listed feature (Rage, Lucky, Font of Magic, Polearm Master), and so do 41 of the 44 granted spells; the other 3 come from items. Another 47 actions belong to a feature the sheet does not list; they stay in Combat as before and no feature refers to them.
+
+**Order:** one group for each class in sheet order, then Feats, then the species, then the background. Within a class, features are ordered by level, then by the sheet's display order, then by their position on the sheet; subclass features sit among the class's own at their level. Feats and species traits keep the sheet's order. An option comes straight after the feature that offers it. An option whose parent is not listed goes to the end of the group for its kind. `packages/rules` does the grouping and ordering; the page only draws the result.
+
+**Unknown shapes:** an entry with no name is left out. Any other missing or malformed field takes a default (no level, an empty description, no parent). A list that is missing or is not a list yields no features. Nothing in this section can stop a character from opening.
+
+**From Part B, features take edits.** A feature's key is used exactly as an ability key is: an `AbilityEdit` is stored under it, as an `edit` item.
+
+- **inCombat, inExplore:** for a feature, unset means not listed, whatever its timing and tags. The app never adds a feature to a play view; only the player's tick does. A feature ticked into a view is listed there as an ability built from it: the feature's key, name and description, the source that matches its origin (`class` for a subclass feature), timing `passive`, and no roll, cost or tags.
+- **Timing, uses, tags, roll:** apply to that ability as they do to any other. They have no effect on the Features page.
+- **hidden:** the feature leaves the Features page and both play views, and is listed in the Features page's "Hidden" drawer. Hiding a feature does not hide the abilities in its `playKeys`; those are hidden by their own keys.
+- **order.features:** as `order.combat`, within a group of the Features page. It orders a group's features; an option moves with its parent. An option whose parent is hidden is listed as one whose parent is missing.
+- **A feature with `playKeys`** can be hidden and moved, and is not offered the other fields: it is already in play as those abilities, which are edited where they are listed. The cost: a feature with several parts, only one of which has an ability (War Caster), cannot be added to a play view as a reminder of the rest. The player adds a custom ability for that.
 
 ## 6. Import flow
 
@@ -405,16 +457,17 @@ The plan key is `{actionKey}+{bonusKey or "none"}`.
 
 ## 10. Views
 
-Both views are phone first. Each is one scrolling page.
+Every view is phone first. Each is one scrolling page.
 
 ### 10.1 Combat
 
-- Header with character name and a Combat / Explore switch.
+- Header with character name and a Combat / Explore / Features switch. Features is section 10.6.
 - Turn tracker: three pills for Action, Bonus Action and Reaction, pinned while the list scrolls. Tapping a pill flips it.
 - Resources: this character's pools as chips with tappable pips.
 - A banner naming the current concentration effect, with a control to end it.
 - Suggested turn card with reason and thumbs up or down; swipe for the next plan (milestone 4).
 - Abilities grouped by Action, Bonus Action, Reaction, "No action needed" (timing `free`, for example Action Surge; collapsed) and "Other" (timing `unknown`; shown only when not empty). Abilities that take a minute or more are not listed. Each row has the name, a cost label, tags, a plain-English roll line and a Use button. An edited row also carries the label "edited".
+- From Part B, an "Always on" group (timing `passive`; collapsed; shown only when not empty), so that reminders do not sit among the abilities of "No action needed". Also from Part B, a row whose timing is `passive` and that costs nothing has no Use button. Until Part B, `passive` shares the "No action needed" group.
 - A group whose timing is spent dims but stays visible.
 - Two rows with the same name are told apart by their cost label ("free cast, 3 left" and "pact slot"). Where two rows on a sheet share a name, the kind of cost ("free cast", "pact slot") is also part of each row's accessible name and of its buttons', so a screen reader can tell them apart.
 - A weapon with a charge pool shows the pool as pips on its row.
@@ -479,6 +532,13 @@ Playing and arranging are separate, so that nobody moves or edits a row by accid
 
 Hide, order and edit work on any row, including the universal actions. The universal actions' own text does not refer to where other rows are.
 
+**Features** (section 10.6) are edited and arranged the same way:
+
+- An opened feature shows "Edit". It opens the same editor. Both "Shown in" boxes start unticked and stay so until the player ticks one; changing a feature's timing or tags never ticks one. A feature starts as Passive.
+- A feature ticked into Combat or Explore is a row there like any other: it sits in the group for its timing, can be moved and hidden there, and gets pips and Use once it has limited uses.
+- The Features page has its own "Edit list", with Hide, the "Hidden" drawer, drag, "Move up" and "Move down" within a group, and its own order. It has no "Add an ability".
+- A feature that already has rows in play (section 5.5) offers only Hide in its editor, and says which rows those are.
+
 ### 10.5 Other screens
 
 - **Sign in:** one button, "Continue with Discord", and the link to About. Shown whenever nobody is signed in on the device. It says so when sign-in cannot start, and warns when a built site has no account settings.
@@ -488,6 +548,18 @@ Hide, order and edit work on any row, including the universal actions. The unive
 - **Import:** see section 6.
 - **About:** the attribution and statement in section 13.
 - **Character:** if a character cannot be opened, the screen says so and links back to the list.
+
+### 10.6 Features (milestone 3)
+
+The third choice in the header switch. It answers "what does my character have?", where Combat and Explore answer "what can I do now?".
+
+- It lists every feature of section 5.5, in that section's groups and order. Each group has a heading: the class's name and level, "Feats", the species' name, the background's name. A group with nothing in it is not shown.
+- A row has the feature's name. A class or subclass feature also says where it comes from and at what level ("Warlock, level 2"; a subclass feature names the subclass). An option is indented under the feature that offers it.
+- A feature that has rows in play carries the label "In play".
+- Tapping a row opens its description, as section 10.3 describes. A feature with no description says so.
+- There is no turn tracker, no resource chips and no Use button: nothing on this page is spent.
+- A sheet with no features shows one line saying so.
+- Before Part B the page is read-only. Part B adds Edit and "Edit list" (section 10.4).
 
 ## 11. Accounts and security
 
@@ -549,7 +621,7 @@ Usage events (milestone 4) will be written locally first and sent in the same wa
 - Sign-in needs a Discord application whose ID and secret are entered in the Supabase dashboard by the owner. The database is created from the SQL files in `supabase/migrations`.
 - Supabase pauses a free project after seven days of low activity and the owner resumes it from the dashboard. While it is paused the app works from each device's copy; signing in on a new device, syncing and import by link wait until it is resumed.
 - An About screen carries the SRD 5.2 attribution required by CC-BY-4.0 and states that the app is not affiliated with D&D Beyond or Wizards of the Coast.
-- Ability descriptions shown in the app come only from the signed-in player's own imported sheet. The app ships no non-SRD rules text.
+- Ability and feature descriptions shown in the app come only from the signed-in player's own imported sheet. The app ships no non-SRD rules text.
 
 ## 14. Testing
 
@@ -561,6 +633,7 @@ Usage events (milestone 4) will be written locally first and sent in the same wa
 - **Access rules:** the SQL in `supabase/migrations` is run inside the test suite on PGlite, a Postgres that runs in-process, with a small stand-in for Supabase's `auth` schema. Tests act as an unapproved player, an approved player and a table admin, and cover the ten-character limit, the write-ordering trigger and the import rate limit. No Docker and no live project is needed.
 - **Syncing:** two in-memory devices and one `memoryRemote`. Tests cover sending, fetching, the later change winning, deletion reaching the other device, and first sign-in upload. `memoryRemote` and the SQL trigger are tested against the same list of cases so that they cannot drift apart.
 - **Edits:** table-driven tests of `applyEdits`, and synthetic converter input for each key collision of section 5.1, since no fixture has one.
+- **Features:** the fixtures' descriptions are placeholders, so tests check what the fixtures do carry: names, origins, the level cut-off, grouping and order, options under their parents, and the links to play rows. Synthetic input covers what no fixture has: a background with a feature of its own, an option with no parent, two features with one key, a feature with no ID, and lists that are missing or malformed. The files in `fixtures/expected` hold sheet numbers, not features, and are not changed. The page is walked through in a browser at phone size before the pull request.
 - **Not covered by automated tests:** Discord sign-in against the real services. The owner checks it after deploying.
 
 ## 15. Milestones
@@ -569,9 +642,10 @@ Each milestone is usable on its own and gets its own implementation plan.
 
 1. **Import and sheet maths**, verified against every available fixture (eight characters across eight classes as of 2026-11-11). Curated tags for all twelve classes are written in milestone 4, where they are first used.
 2. **Both views with turn and resource tracking**, stored on the device only. Includes the import Edge Function, which the browser needs to fetch a character, the Supabase project that hosts it, and the first deployment of the static site. No accounts, overlays, suggestions or usage events.
-3. **Accounts, saved characters and overlays** (edit, reorder, hide, add custom). One plan in two parts, each with its own pull request:
-   - **Part A, accounts and syncing:** the version 2 device storage, the database and its access rules, Discord sign-in, approval and the Players screen, syncing, the table admin's "Table" section, and the import function's access check and limits. Usable on its own: characters are backed up and follow the player between devices.
-   - **Part B, overlays:** the ability editor, "Edit list" with drag and drop, hiding, custom abilities, and re-import with edits.
+3. **Accounts, saved characters and overlays** (edit, reorder, hide, add custom). Three pieces, each with its own pull request:
+   - **Part A, accounts and syncing:** the version 2 device storage, the database and its access rules, Discord sign-in, approval and the Players screen, syncing, the table admin's "Table" section, and the import function's access check and limits. Usable on its own: characters are backed up and follow the player between devices. Merged 2026-11-19.
+   - **The Features page** (sections 5.5 and 10.6), read-only, with its own plan. It comes before Part B so that Part B's editor, hiding and arranging cover features from the start.
+   - **Part B, overlays:** the ability editor, "Edit list" with drag and drop, hiding, custom abilities, re-import with edits, and all of these for features, with the "Always on" group. Its plan is revised after the Features page merges.
 4. **Suggestions:** turn plans, situation chips, feedback and usage learning.
 5. **Offline support and install to home screen.**
 
@@ -589,6 +663,8 @@ Each milestone is usable on its own and gets its own implementation plan.
 - Live updates between devices. A change made elsewhere arrives at the next fetch, within 30 seconds.
 - A conflict screen. The later change wins (section 12).
 - An admin creating a character for another player, or moving a character between players.
+- The app deciding which features matter in play. Nothing on the sheet separates Danger Sense from Languages, and a list of names would break the principle in section 1. The player ticks the ones they want.
+- Search on the Features page, and adding a feature by hand. A custom ability covers the second.
 
 The ability key and overlay model leave room for the first three without rework.
 
@@ -600,6 +676,8 @@ The ability key and overlay model leave room for the first three without rework.
 | A public release would lean on an unofficial endpoint and D&D Beyond's terms | Out of scope now; must be revisited before any public launch |
 | Homebrew authored as text only | The ability editor (timing, uses, tags, roll) and custom abilities cover every case by hand |
 | Sheet maths disagrees with D&D Beyond | Fixture tests against every available real sheet; any ability's roll can be replaced. The sheet's own numbers cannot be overridden yet (section 16) |
+| The Features page is long, and part of it is bookkeeping (Size, Languages, Ability Score Improvement) | Accepted until Part B, which lets the player hide and reorder. The alternative is a list of names to leave out |
+| A new player does not know which features to tick into Combat | Accepted for now. Milestone 4's curated tags are where the app could suggest some, by tag and not by name |
 | Two people change the same item at once and one change is lost silently | Accepted. Items are small (one ability's edits, one view's order), so it needs the same item on two devices within one fetch interval |
 | A table admin spends a player's resources by accident while their character is open | Accepted, to avoid a read-only mode. Undo reverses the slip |
 | Anyone with a Discord account can sign in and wait for approval | Accepted. An unapproved account can read only its own profile and can call nothing |
