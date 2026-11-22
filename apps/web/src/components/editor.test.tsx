@@ -1,8 +1,9 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import type { Roll } from '@cw/model';
+import { applyEdits, type Sheet } from '@cw/rules';
 import type { Slug } from '../../../../test-utils/fixtures';
 import type { View } from '../router';
 import { CharacterScreen } from '../screens/Character';
@@ -438,6 +439,37 @@ describe('AbilityEditor', () => {
     await save();
     expect(screen.queryByRole('article', { name: 'Dash' })).toBeNull();
     expect(screen.getByRole('article', { name: 'Dodge' })).toBeInTheDocument();
+  });
+
+  /** Replaces the open character's imported sheet, as a sync or a re-import would, keeping its edits. */
+  function replaceBase(change: (base: Sheet) => Sheet): void {
+    const { baseSheet, edits: current } = useStore.getState();
+    if (!baseSheet) throw new Error('no character is open');
+    const next = change(baseSheet);
+    act(() => useStore.setState({ baseSheet: next, sheet: applyEdits(next, current) }));
+  }
+
+  it('saves a change to an ability whose imported pool is above 99, leaving the uses alone', async () => {
+    await open('danger');
+    const key = ability('Second Wind').key;
+    replaceBase((base) => ({ ...base, resources: base.resources.map((r) => (r.key === key ? { ...r, max: 100 } : r)) }));
+    const dialog = await edit('Second Wind');
+    expect(within(dialog).getByLabelText('Maximum uses')).toHaveValue(100);
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Healing' }));
+    await save();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(edits()).toEqual({ [key]: { tags: ['healing'] } });
+  });
+
+  it('records only the timing when only the timing changes, and the Combat box follows it', async () => {
+    await open('vlad');
+    const key = ability('Hex').key;
+    const dialog = await edit('Hex');
+    await userEvent.selectOptions(within(dialog).getByRole('combobox', { name: 'Timing' }), 'Takes a minute or more');
+    expect(within(dialog).getByRole('checkbox', { name: 'Combat' })).not.toBeChecked();
+    await save();
+    expect(edits()).toEqual({ [key]: { timing: 'long' } });
+    expect(screen.queryByRole('article', { name: 'Hex' })).toBeNull();
   });
 
   it('tells twins apart on the Edit button and titles the editor with the name', async () => {

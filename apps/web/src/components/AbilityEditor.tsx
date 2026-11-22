@@ -1,4 +1,4 @@
-import type { Ability, ResetType, Roll } from '@cw/model';
+import type { Ability, ResetType, Roll, UsesEdit } from '@cw/model';
 import { canEditUses, diffEdit, editForm, isFeatureKey, normaliseRoll, type EditForm } from '@cw/rules';
 import { useState, type FormEvent } from 'react';
 import { useStore } from '../store';
@@ -53,7 +53,12 @@ export function AbilityEditor({ ability, onClose }: { ability: Ability; onClose:
   function save(event: FormEvent): void {
     event.preventDefault();
     if (!baseSheet || !start || !draft || !base) return;
-    if (usesEditable && draft.limited && !validMaxUses(draft.max)) {
+    const draftUses: UsesEdit | null = draft.limited ? { max: draft.max, reset: draft.reset } : null;
+    const usesChanged = draftUses === null || start.uses === null
+      ? draftUses !== start.uses
+      : draftUses.max !== start.uses.max || draftUses.reset !== start.uses.reset;
+    // Untouched uses pass through as they are, even a maximum the editor would not accept.
+    if (usesEditable && usesChanged && draftUses !== null && !validMaxUses(draftUses.max)) {
       setError(MAX_USES_ERROR);
       return;
     }
@@ -65,7 +70,7 @@ export function AbilityEditor({ ability, onClose }: { ability: Ability; onClose:
     }
     const form: EditForm = {
       timing: draft.timing,
-      uses: usesEditable && draft.limited ? { max: draft.max, reset: draft.reset } : null,
+      uses: usesEditable ? (usesChanged ? draftUses : start.uses) : null,
       tags: draft.tags,
       roll,
       inCombat: draft.inCombat,
