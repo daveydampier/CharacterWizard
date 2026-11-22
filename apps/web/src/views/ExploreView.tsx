@@ -5,6 +5,7 @@ import { AbilityRow } from '../components/AbilityRow';
 import { ConcentrationBanner } from '../components/ConcentrationBanner';
 import { NotesList } from '../components/NotesList';
 import { ResourceChips } from '../components/ResourceChips';
+import { useAbilityEdit } from '../components/useAbilityEdit';
 import { useAbilityUse } from '../components/useAbilityUse';
 import { useStore } from '../store';
 
@@ -87,6 +88,7 @@ export function ExploreView({ sheet }: { sheet: Sheet }) {
   const rest = useStore((s) => s.rest);
   const endConcentration = useStore((s) => s.endConcentration);
   const { request, slotSheet } = useAbilityUse('explore');
+  const { edit, editor } = useAbilityEdit();
   const [query, setQuery] = useState('');
   const needle = query.trim().toLowerCase();
   const matches = (text: string): boolean => needle === '' || text.toLowerCase().includes(needle);
@@ -113,6 +115,7 @@ export function ExploreView({ sheet }: { sheet: Sheet }) {
         mode="explore"
         onUse={request}
         onAdjust={(pool, delta) => adjust(pool.key, delta)}
+        onEdit={edit}
       />
     ));
   } else if (needle === '') {
@@ -161,6 +164,7 @@ export function ExploreView({ sheet }: { sheet: Sheet }) {
       </div>
 
       {slotSheet}
+      {editor}
     </div>
   );
 }

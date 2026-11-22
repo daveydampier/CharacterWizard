@@ -5,6 +5,7 @@ import { AbilityRow } from '../components/AbilityRow';
 import { ConcentrationBanner } from '../components/ConcentrationBanner';
 import { NotesList } from '../components/NotesList';
 import { ResourceChips } from '../components/ResourceChips';
+import { useAbilityEdit } from '../components/useAbilityEdit';
 import { useAbilityUse } from '../components/useAbilityUse';
 import { useStore } from '../store';
 
@@ -44,6 +45,7 @@ export function CombatView({ sheet }: { sheet: Sheet }) {
   const togglePill = useStore((s) => s.togglePill);
   const endConcentration = useStore((s) => s.endConcentration);
   const { request, slotSheet } = useAbilityUse('combat');
+  const { edit, editor } = useAbilityEdit();
   const groups = useMemo(() => combatGroups(sheet), [sheet]);
   const allPools = useMemo(() => pools(sheet), [sheet]);
 
@@ -57,6 +59,7 @@ export function CombatView({ sheet }: { sheet: Sheet }) {
         mode="combat"
         onUse={request}
         onAdjust={(pool, delta) => adjust(pool.key, delta)}
+        onEdit={edit}
       />
     ));
 
@@ -101,12 +104,13 @@ export function CombatView({ sheet }: { sheet: Sheet }) {
       </Group>
       {groups.other.length > 0 ? <Group title="Other">{rows(groups.other)}</Group> : null}
       {groups.free.length > 0 ? <Folded title="No action needed" count={groups.free.length}>{rows(groups.free)}</Folded> : null}
-      <Folded title="Anyone can do this">{rows(sheet.universal)}</Folded>
+      {groups.universal.length > 0 ? <Folded title="Anyone can do this">{rows(groups.universal)}</Folded> : null}
       <Folded title="Keep in mind" count={sheet.notes.length}>
         <NotesList notes={sheet.notes} empty="No conditional notes on this sheet." />
       </Folded>
 
       {slotSheet}
+      {editor}
     </div>
   );
 }
