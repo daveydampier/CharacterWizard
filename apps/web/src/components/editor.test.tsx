@@ -277,6 +277,17 @@ describe('AbilityEditor', () => {
     expect(within(dialog).queryByRole('combobox', { name: 'Comes back on' })).toBeNull();
   });
 
+  it('says a weapon whose item has charges spends them on its row, and offers no limited uses', async () => {
+    await open('maya');
+    const weapon = useStore.getState().sheet?.abilities.find((a) => a.poolKey !== null);
+    if (!weapon) throw new Error('expected a weapon with a charge pool');
+    const dialog = await edit(weapon.name);
+    expect(within(dialog).getByText("This ability's charges are on its item, and are spent by hand on its row.")).toBeInTheDocument();
+    expect(within(dialog).queryByText('This ability costs a spell slot.')).toBeNull();
+    expect(within(dialog).queryByRole('checkbox', { name: 'Limited uses' })).toBeNull();
+    expect(within(dialog).queryByLabelText('Maximum uses')).toBeNull();
+  });
+
   it('toggles a tag', async () => {
     await open('vlad');
     const dialog = await edit('Hex');

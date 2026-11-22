@@ -125,8 +125,9 @@ export function applyEdits(sheet: Sheet, edits: CharacterEdits): Sheet {
     if (change.timing) next = { ...next, timing: change.timing };
     if (change.tags) next = { ...next, tags: change.tags, tagSource: 'user' };
     if (change.roll) next = { ...next, roll: change.roll };
-    // An ability that costs a spell slot keeps that cost: its uses cannot be edited.
-    if (change.uses && next.cost.kind !== 'slot') {
+    // An ability that costs a spell slot keeps that cost, and so does one whose item's charges are
+    // spent by hand on its row: their uses cannot be edited.
+    if (change.uses && canEditUses(next)) {
       if (change.uses === 'none') {
         if (next.cost.kind === 'uses') released.add(next.cost.resourceKey);
         next = { ...next, cost: { kind: 'none' } };
@@ -203,8 +204,12 @@ export interface EditForm {
   hidden: boolean;
 }
 
-/** True when the ability's uses can be edited: anything that does not cost a spell slot. */
-export const canEditUses = (ability: Ability): boolean => ability.cost.kind !== 'slot';
+/**
+ * True when the ability's uses can be edited: anything that does not cost a spell slot, and does
+ * not carry its item's charge pool on its row (`poolKey`). A pool given to such an ability would
+ * take its item's key, rewrite the item's charges and make every use spend one.
+ */
+export const canEditUses = (ability: Ability): boolean => ability.cost.kind !== 'slot' && ability.poolKey === null;
 
 /** The form for an ability as it stands on `sheet` (which may or may not have edits applied). */
 export function editForm(sheet: Sheet, ability: Ability): EditForm {

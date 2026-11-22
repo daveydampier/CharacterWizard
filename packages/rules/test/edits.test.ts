@@ -157,6 +157,20 @@ describe('applyEdits: limited uses', () => {
     expect(edited.resources).toEqual(sheet.resources);
   });
 
+  it('leaves a weapon whose item has charges alone: its pool and its cost', () => {
+    const sheet = sheetOf('maya');
+    const weapon = sheet.abilities.find((a) => a.poolKey !== null);
+    if (!weapon || weapon.poolKey === null) throw new Error('expected a weapon with a charge pool');
+    expect(canEditUses(weapon)).toBe(false);
+    for (const uses of [{ max: 7, reset: 'short' as const }, 'none' as const]) {
+      const edited = applyEdits(sheet, edits({ abilities: { [weapon.key]: { uses } } }));
+      expect(edited.resources).toEqual(sheet.resources);
+      const after = edited.abilities.find((a) => a.key === weapon.key);
+      expect(after?.cost).toEqual(weapon.cost);
+      expect(after?.poolKey).toBe(weapon.poolKey);
+    }
+  });
+
   it('clamps what was spent to an edited maximum', () => {
     const sheet = sheetOf('danger');
     const wind = named(sheet, 'Second Wind');

@@ -154,7 +154,11 @@ export function AbilityEditor({ ability, onClose }: { ability: Ability; onClose:
             ) : null}
           </div>
         ) : (
-          <p className="text-sm text-slate-600">This ability costs a spell slot.</p>
+          <p className="text-sm text-slate-600">
+            {ability.cost.kind === 'slot'
+              ? 'This ability costs a spell slot.'
+              : "This ability's charges are on its item, and are spent by hand on its row."}
+          </p>
         )}
 
         <TagToggles value={draft.tags} onChange={(tags) => change({ tags })} />
