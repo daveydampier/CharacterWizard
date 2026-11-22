@@ -106,6 +106,32 @@ describe('editing an ability', () => {
     expect(state().play.concentrationKey).toBeNull();
   });
 
+  it('forgets an undo step that would put back more spent than an edited maximum allows', async () => {
+    await seed('danger');
+    const wind = ability('Second Wind');
+    for (let i = 0; i < 3; i += 1) {
+      state().startTurn();
+      state().use(ability('Second Wind'), 'combat');
+    }
+    expect(state().play.spent[wind.key]).toBe(3);
+    state().rest('long');
+    expect(state().undo?.state.spent[wind.key]).toBe(3);
+    state().setEdit(wind.key, { uses: { max: 1, reset: 'long' } });
+    expect(state().undo).toBeNull();
+    expect(state().play.spent).toEqual({});
+  });
+
+  it('forgets an undo step that would concentrate on an ability that is now hidden', async () => {
+    await seed('vlad');
+    const hex = ability('Hex');
+    state().use(hex, 'explore');
+    state().use(ability('Darkness'), 'explore');
+    expect(state().undo?.state.concentrationKey).toBe(hex.key);
+    state().setEdit(hex.key, { hidden: true });
+    expect(state().undo).toBeNull();
+    expect(state().play.concentrationKey).toBe(ability('Darkness').key);
+  });
+
   it('keeps the undo step when an edit does not touch what was spent', async () => {
     await seed('vlad');
     state().use(ability('Hex'), 'combat');
@@ -384,6 +410,43 @@ describe('edits and the account', () => {
     await state().syncNow();
     await syncOnce(dm);
     expect((await itemsOf(dm.storage, record.id, 'edit'))[0].data).toEqual({ timing: 'action' });
+  });
+
+  it('forgets an undo step made during a fetch when a fetched edit lowers the maximum it would put back', async () => {
+    const server = testServer();
+    server.addUser('user-dm', 'Dee', { approved: true, admin: true });
+    const inner = testRemote(server);
+    let during: (() => void) | null = null;
+    const remote = {
+      ...inner,
+      async pullItems(after: number) {
+        const rows = await inner.pullItems(after);
+        during?.();
+        during = null;
+        return rows;
+      },
+    };
+    const record = await seed('danger', memoryStorage(), remote);
+    await state().syncNow();
+    const wind = ability('Second Wind');
+    for (let i = 0; i < 3; i += 1) {
+      state().startTurn();
+      state().use(ability('Second Wind'), 'combat');
+    }
+    await settle();
+    await state().syncNow();
+    const dm = { storage: memoryStorage(), remote: server.remote({ userId: 'user-dm' }) };
+    await syncOnce(dm);
+    await dm.storage.putItem({
+      characterId: record.id, kind: 'edit', key: wind.key, data: { uses: { max: 1, reset: 'long' } },
+      updatedAt: new Date().toISOString(), deleted: false, dirty: true,
+    });
+    await syncOnce(dm);
+    during = () => state().rest('long');
+    await state().syncNow();
+    expect(state().sheet?.resources.find((r) => r.key === wind.key)?.max).toBe(1);
+    expect(state().play.spent[wind.key]).toBeUndefined();
+    expect(state().undo).toBeNull();
   });
 
   it('keeps on screen an edit made while what was fetched was being read back', async () => {

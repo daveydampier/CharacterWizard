@@ -133,6 +133,14 @@ const playItem = (state: PlayState): PlayItem => ({ spent: state.spent, concentr
 const same = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
 const live = (all: StoredCharacter[]): StoredCharacter[] => all.filter((c) => !c.deleted);
 
+/**
+ * The undo step, if it still fits `sheet`: what it would put back as spent and as concentration
+ * is all allowed there. Null otherwise, since undo only ever reverses the most recent change and
+ * must not put back a state that an edit has since ruled out.
+ */
+const undoFor = (undo: Undo | null, sheet: Sheet): Undo | null =>
+  undo && same(playItem(clampState(undo.state, sheet)), playItem(undo.state)) ? undo : null;
+
 /** A session as kept on the device, repaired where it is malformed. Null when there is none. */
 function sessionFrom(value: unknown): Session | null {
   if (value === null || typeof value !== 'object') return null;
@@ -279,7 +287,7 @@ export const useStore = create<AppStore>()((set, get) => {
     const playChanged = !same(playItem(clamped), playItem(play));
     localEdits += 1;
     if (playChanged) localChanges += 1;
-    set({ edits: next, sheet, play: playChanged ? clamped : play, undo: playChanged ? null : get().undo });
+    set({ edits: next, sheet, play: playChanged ? clamped : play, undo: playChanged ? null : undoFor(get().undo, sheet) });
     const started: Promise<unknown>[] = writes.map((write) =>
       storage.updateItem(openId, write.kind, write.key, (current) => ({
         put: {
@@ -340,7 +348,7 @@ export const useStore = create<AppStore>()((set, get) => {
       // being read back. What is on screen is the newest copy: it is written again, stamped later
       // than what was fetched, and sent.
       const kept = clampState(get().play, sheet);
-      set({ baseSheet, sheet, edits: saved.edits, play: kept });
+      set({ baseSheet, sheet, edits: saved.edits, play: kept, undo: undoFor(get().undo, sheet) });
       await save(savePlay(openId, kept, null));
       changedLocally();
       return;
