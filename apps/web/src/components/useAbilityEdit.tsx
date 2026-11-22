@@ -1,17 +1,18 @@
+import type { ViewName } from '@cw/model';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useStore } from '../store';
 import { AbilityEditor } from './AbilityEditor';
 import { CustomAbilityEditor } from './CustomAbilityEditor';
 import { FeatureEditor } from './FeatureEditor';
 
-/** What the editor is open for: a row on the sheet, by key, or an ability that does not exist yet. */
-type Target = { key: string } | 'new' | null;
+/** What the editor is open for: a row on the sheet, by key, or an ability that does not exist yet, added from a view. */
+type Target = { key: string } | { add: ViewName } | null;
 
 interface Editing {
   /** Opens the editor for an ability or a feature. */
   edit: (row: { key: string }) => void;
-  /** Opens the editor for a new ability of the player's own. */
-  add: () => void;
+  /** Opens the editor for a new ability of the player's own, added from `view`. */
+  add: (view: ViewName) => void;
   /** The open editor, to render once in the view. */
   editor: ReactNode;
 }
@@ -30,7 +31,7 @@ export function useAbilityEdit(): Editing {
   const [target, setTarget] = useState<Target>(null);
   const close = (): void => setTarget(null);
 
-  const key = target !== null && target !== 'new' ? target.key : null;
+  const key = target !== null && 'key' in target ? target.key : null;
   const ability = sheet && key !== null
     ? [...sheet.abilities, ...sheet.universal].find((a) => a.key === key) ?? sheet.featureRows[key]
     : undefined;
@@ -45,11 +46,11 @@ export function useAbilityEdit(): Editing {
   }, [key, ability, feature]);
 
   let editor: ReactNode = null;
-  if (target === 'new') editor = <CustomAbilityEditor custom={null} onClose={close} />;
+  if (target !== null && 'add' in target) editor = <CustomAbilityEditor custom={null} view={target.add} onClose={close} />;
   // Keyed, so that opening the editor for another row starts a new form.
   else if (custom) editor = <CustomAbilityEditor key={custom.key} custom={custom} onClose={close} />;
   else if (ability) editor = <AbilityEditor key={ability.key} ability={ability} onClose={close} />;
   else if (feature) editor = <FeatureEditor key={feature.key} feature={feature} onClose={close} />;
 
-  return { edit: (row) => setTarget({ key: row.key }), add: () => setTarget('new'), editor };
+  return { edit: (row) => setTarget({ key: row.key }), add: (view) => setTarget({ add: view }), editor };
 }

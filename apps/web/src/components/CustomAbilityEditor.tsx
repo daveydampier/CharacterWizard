@@ -1,4 +1,4 @@
-import type { AbilityEdit, CustomAbility, ResetType, Roll, Tag, Timing } from '@cw/model';
+import type { AbilityEdit, CustomAbility, ResetType, Roll, Tag, Timing, ViewName } from '@cw/model';
 import { defaultViews, editForm } from '@cw/rules';
 import { useId, useState, type FormEvent } from 'react';
 import { newCustomKey, useStore } from '../store';
@@ -18,6 +18,9 @@ const COST_OPTIONS: { value: CostKind; label: string }[] = [
 ];
 
 const SLOT_LEVELS = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+
+/** Stands for the key a new ability will have: one of the player's own, never a feature's. */
+const NEW_KEY = 'own:new';
 
 /** What the form holds while it is open. Every kind of cost keeps its fields, so switching between them forgets nothing. */
 interface Draft {
@@ -58,20 +61,36 @@ function draftOf(custom: CustomAbility | null, shown: { inCombat: boolean; inExp
  * Adds an ability of the player's own (`custom` is null), or changes or deletes one. Unlike an
  * ability from the sheet it has a name, a description and a cost to set, and nothing to go back to.
  */
-export function CustomAbilityEditor({ custom, onClose }: { custom: CustomAbility | null; onClose: () => void }) {
+interface Props {
+  custom: CustomAbility | null;
+  /** For a new ability: the view it is added from, which lists it. */
+  view?: ViewName;
+  onClose: () => void;
+}
+
+export function CustomAbilityEditor({ custom, view, onClose }: Props) {
   const sheet = useStore((s) => s.sheet);
   const saveCustom = useStore((s) => s.saveCustom);
   const deleteCustom = useStore((s) => s.deleteCustom);
   const setEdit = useStore((s) => s.setEdit);
   const stored = useStore((s) => (custom ? s.edits.abilities[custom.key] : undefined));
-  /** A box counts as set by the player if an earlier edit recorded it. */
-  const [chosen, setChosen] = useState<ViewsChosen>(() => ({
-    combat: stored?.inCombat !== undefined, explore: stored?.inExplore !== undefined,
-  }));
+  /**
+   * A box counts as set by the player if an earlier edit recorded it. A new ability is listed in
+   * the view it is added from: that box starts ticked, as if the player had ticked it.
+   */
+  const [chosen, setChosen] = useState<ViewsChosen>(() => (custom
+    ? { combat: stored?.inCombat !== undefined, explore: stored?.inExplore !== undefined }
+    : { combat: view === 'combat', explore: view === 'explore' }));
   const id = useId();
   const [draft, setDraft] = useState<Draft>(() => {
+    if (!custom) {
+      // A new ability starts where the app's rule would list the draft, and in the view it came from.
+      const empty = draftOf(null, { inCombat: false, inExplore: false, hidden: false });
+      const rule = defaultViews({ key: NEW_KEY, timing: empty.timing, tags: empty.tags, ritual: false });
+      return { ...empty, inCombat: rule.combat || view === 'combat', inExplore: rule.explore || view === 'explore' };
+    }
     // Where an existing ability is listed, and whether it is hidden, come from the sheet.
-    const row = custom && sheet ? [...sheet.abilities, ...sheet.hidden].find((a) => a.key === custom.key) : undefined;
+    const row = sheet ? [...sheet.abilities, ...sheet.hidden].find((a) => a.key === custom.key) : undefined;
     const form = row && sheet ? editForm(sheet, row) : null;
     return draftOf(custom, { inCombat: form?.inCombat ?? true, inExplore: form?.inExplore ?? false, hidden: form?.hidden ?? false });
   });
@@ -112,17 +131,16 @@ export function CustomAbilityEditor({ custom, onClose }: { custom: CustomAbility
     saveCustom({
       key, name, timing: draft.timing, roll, cost, tags: draft.tags, concentration: draft.concentration, description: draft.description,
     });
-    if (custom) {
-      // Only a choice that differs from where the app would list the saved ability is recorded.
-      const after = useStore.getState().sheet;
-      const saved = after ? [...after.abilities, ...after.hidden].find((a) => a.key === key) : undefined;
-      const fallback = saved ? defaultViews(saved) : { combat: draft.inCombat, explore: draft.inExplore };
-      const edit: AbilityEdit = {};
-      if (draft.inCombat !== fallback.combat) edit.inCombat = draft.inCombat;
-      if (draft.inExplore !== fallback.explore) edit.inExplore = draft.inExplore;
-      if (draft.hidden) edit.hidden = true;
-      setEdit(key, edit);
-    }
+    // Only a choice that differs from where the app would list the saved ability is recorded,
+    // for a new ability as for one that exists.
+    const after = useStore.getState().sheet;
+    const saved = after ? [...after.abilities, ...after.hidden].find((a) => a.key === key) : undefined;
+    const fallback = saved ? defaultViews(saved) : { combat: draft.inCombat, explore: draft.inExplore };
+    const edit: AbilityEdit = {};
+    if (draft.inCombat !== fallback.combat) edit.inCombat = draft.inCombat;
+    if (draft.inExplore !== fallback.explore) edit.inExplore = draft.inExplore;
+    if (draft.hidden) edit.hidden = true;
+    setEdit(key, edit);
     onClose();
   }
 
@@ -194,14 +212,12 @@ export function CustomAbilityEditor({ custom, onClose }: { custom: CustomAbility
         <TagToggles value={draft.tags} onChange={(tags) => change({ tags })} />
         <RollEditor value={draft.roll} onChange={(roll) => change({ roll })} />
 
+        <ShownIn inCombat={draft.inCombat} inExplore={draft.inExplore} onChange={change} />
         {custom ? (
-          <>
-            <ShownIn inCombat={draft.inCombat} inExplore={draft.inExplore} onChange={change} />
-            <label className={CHECK}>
-              <input type="checkbox" checked={draft.hidden} onChange={(event) => change({ hidden: event.target.checked })} className="size-5" />
-              <span>Hide this ability</span>
-            </label>
-          </>
+          <label className={CHECK}>
+            <input type="checkbox" checked={draft.hidden} onChange={(event) => change({ hidden: event.target.checked })} className="size-5" />
+            <span>Hide this ability</span>
+          </label>
         ) : null}
 
         {error ? <p role="alert" className={ALERT}>{error}</p> : null}

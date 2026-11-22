@@ -76,8 +76,10 @@ describe('adding a custom ability', () => {
     expect(within(dialog).getByRole('checkbox', { name: 'Concentration' })).not.toBeChecked();
     expect(within(dialog).getAllByRole('button', { pressed: false })).toHaveLength(9);
     expect(within(dialog).getByRole('combobox', { name: 'Roll' })).toHaveValue('none');
-    // Where it is listed and whether it is hidden are for an ability that exists.
-    expect(within(dialog).queryByRole('checkbox', { name: 'Combat' })).toBeNull();
+    // Shown in starts where the app would list it, with the view it was added from ticked.
+    expect(within(dialog).getByRole('checkbox', { name: 'Combat' })).toBeChecked();
+    expect(within(dialog).getByRole('checkbox', { name: 'Explore' })).not.toBeChecked();
+    // Whether it is hidden is for an ability that exists.
     expect(within(dialog).queryByRole('checkbox', { name: 'Hide this ability' })).toBeNull();
     expect(within(dialog).queryByRole('button', { name: 'Delete' })).toBeNull();
   });
@@ -264,6 +266,57 @@ describe('adding a custom ability', () => {
     await tap('Utility');
     await tap('Save');
     expect(arranged('Abilities')).toContain('Bear Whisper');
+  });
+
+  const keyOf = (name: string): string => {
+    const found = state().edits.custom.find((c) => c.name === name);
+    if (!found) throw new Error(`no custom ability called ${name}`);
+    return found.key;
+  };
+
+  it('added from Explore with a name only, is listed in Explore', async () => {
+    await open('franny', 'explore');
+    const dialog = await add();
+    expect(within(dialog).getByRole('checkbox', { name: 'Explore' })).toBeChecked();
+    expect(within(dialog).getByRole('checkbox', { name: 'Combat' })).toBeChecked();
+    await fill('Name', 'Bear Whisper');
+    await tap('Save');
+    expect(arranged('Abilities')).toContain('Bear Whisper');
+    expect(state().edits.abilities).toEqual({ [keyOf('Bear Whisper')]: { inExplore: true } });
+  });
+
+  it('added from Combat as taking a minute or more, is listed in Combat', async () => {
+    await open('franny', 'combat');
+    const dialog = await add();
+    await fill('Name', 'Long Song');
+    await choose('Timing', 'Takes a minute or more');
+    // The box for the view it was added from stays ticked; the other follows the timing.
+    expect(within(dialog).getByRole('checkbox', { name: 'Combat' })).toBeChecked();
+    expect(within(dialog).getByRole('checkbox', { name: 'Explore' })).toBeChecked();
+    await tap('Save');
+    expect(arranged('Other')).toContain('Long Song');
+    expect(state().edits.abilities).toEqual({ [keyOf('Long Song')]: { inCombat: true } });
+  });
+
+  it('added from Combat with a name only, records nothing about where it is shown', async () => {
+    await open('franny', 'combat');
+    await add();
+    await fill('Name', 'Pack Howl');
+    await tap('Save');
+    expect(arranged('Action')).toContain('Pack Howl');
+    expect(state().edits.custom).toHaveLength(1);
+    expect(state().edits.abilities).toEqual({});
+  });
+
+  it('added from Explore with Explore unticked, is not listed in Explore', async () => {
+    await open('franny', 'explore');
+    const dialog = await add();
+    await fill('Name', 'Bear Whisper');
+    await userEvent.click(within(dialog).getByRole('checkbox', { name: 'Explore' }));
+    await tap('Save');
+    expect(state().edits.custom).toHaveLength(1);
+    expect(screen.queryByRole('listitem', { name: 'Bear Whisper' })).toBeNull();
+    expect(state().edits.abilities).toEqual({});
   });
 });
 
