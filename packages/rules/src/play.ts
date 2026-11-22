@@ -190,20 +190,35 @@ export function clampState(state: PlayState, sheet: Sheet): PlayState {
   return { spent, concentrationKey: concentrating ? state.concentrationKey : null, turn: { ...state.turn } };
 }
 
-/** The short label that tells two rows with the same name apart: "pact slot", "free cast, 3 left". */
-export function costLabel(ability: Ability, sheet: Sheet, state: PlayState): string | null {
+/** The pool an ability's Use spends from. Undefined when it costs no uses or the pool is not on the sheet. */
+function usesPool(ability: Ability, sheet: Sheet): Pool | undefined {
+  if (ability.cost.kind !== 'uses') return undefined;
+  const key = ability.cost.resourceKey;
+  return pools(sheet).find((p) => p.key === key);
+}
+
+/**
+ * What kind of cost an ability has, in words that do not change as uses are spent: "pact slot",
+ * "free cast", "limited uses", "1 charge of Shepherds Staff". Null when it costs nothing.
+ */
+export function costKind(ability: Ability, sheet: Sheet): string | null {
   if (ability.cost.kind === 'slot') {
     return sheet.pactSlots && Object.keys(sheet.slots).length === 0 ? 'pact slot' : 'spell slot';
   }
-  if (ability.cost.kind === 'uses') {
-    const key = ability.cost.resourceKey;
-    const pool = pools(sheet).find((p) => p.key === key);
-    if (!pool) return null;
-    const left = `${remaining(pool, state)} left`;
-    if (key !== ability.key) return `1 charge of ${pool.name}, ${left}`;
-    return ability.source === 'spell' ? `free cast, ${left}` : left;
-  }
-  return null;
+  const pool = usesPool(ability, sheet);
+  if (!pool) return null;
+  if (pool.key !== ability.key) return `1 charge of ${pool.name}`;
+  return ability.source === 'spell' ? 'free cast' : 'limited uses';
+}
+
+/** The short label that tells two rows with the same name apart: "pact slot", "free cast, 3 left". */
+export function costLabel(ability: Ability, sheet: Sheet, state: PlayState): string | null {
+  const kind = costKind(ability, sheet);
+  const pool = usesPool(ability, sheet);
+  if (kind === null || !pool) return kind;
+  const left = `${remaining(pool, state)} left`;
+  // A feature's own uses need no words: the number says it.
+  return pool.key === ability.key && ability.source !== 'spell' ? left : `${kind}, ${left}`;
 }
 
 /** "Used Hex. Spent: Bonus Action, a pact slot." Compares the state before and after a Use. */

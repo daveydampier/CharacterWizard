@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import type { PlayState } from '@cw/model';
@@ -109,14 +109,30 @@ describe('NotesList', () => {
 });
 
 describe('AbilityRow', () => {
-  async function row(name: string, state: PlayState = emptyPlayState(), cost?: 'slot' | 'uses') {
-    await seed('vlad');
+  /** Renders one of the open character's rows. `label` is its accessible name where that is not its name. */
+  function show(name: string, options: { state?: PlayState; cost?: 'slot' | 'uses'; label?: string; edit?: boolean } = {}) {
     const sheet = useStore.getState().sheet;
     if (!sheet) throw new Error('no sheet');
     const onUse = vi.fn();
     const onAdjust = vi.fn();
-    render(<AbilityRow ability={ability(name, cost)} sheet={sheet} state={state} mode="combat" onUse={onUse} onAdjust={onAdjust} />);
-    return { article: screen.getByRole('article', { name }), onUse, onAdjust };
+    const onEdit = vi.fn();
+    render(
+      <AbilityRow
+        ability={ability(name, options.cost)}
+        sheet={sheet}
+        state={options.state ?? emptyPlayState()}
+        mode="combat"
+        onUse={onUse}
+        onAdjust={onAdjust}
+        onEdit={options.edit ? onEdit : undefined}
+      />,
+    );
+    return { article: screen.getByRole('article', { name: options.label ?? name }), onUse, onAdjust, onEdit };
+  }
+
+  async function row(name: string, state: PlayState = emptyPlayState(), cost?: 'slot' | 'uses', label?: string) {
+    await seed('vlad');
+    return show(name, { state, cost, label });
   }
 
   it('shows the name, cost label, tags and roll line, and calls onUse', async () => {
@@ -128,8 +144,71 @@ describe('AbilityRow', () => {
   });
 
   it('tells two abilities with the same name apart by their cost', async () => {
-    const { article } = await row('Misty Step', emptyPlayState(), 'uses');
+    const { article } = await row('Misty Step', emptyPlayState(), 'uses', 'Misty Step (free cast)');
     expect(article).toHaveTextContent('free cast, 3 left');
+  });
+
+  it('names twins by their kind of cost, on the row and on its Use button', async () => {
+    await seed('vlad');
+    const free = show('Misty Step', { cost: 'uses', label: 'Misty Step (free cast)' });
+    const slot = show('Misty Step', { cost: 'slot', label: 'Misty Step (pact slot)' });
+    await userEvent.click(within(free.article).getByRole('button', { name: 'Use Misty Step (free cast)' }));
+    expect(free.onUse).toHaveBeenCalledWith(ability('Misty Step', 'uses'));
+    expect(within(slot.article).getByRole('button', { name: 'Use Misty Step (pact slot)' })).toBeInTheDocument();
+    expect(screen.queryByRole('article', { name: 'Misty Step' })).toBeNull();
+  });
+
+  it('keeps the plain name for an ability with a cost and no twin, and for twins that cost nothing', async () => {
+    await seed('vlad');
+    expect(show('Arms of Hadar').article).toHaveAccessibleName('Arms of Hadar');
+    cleanup();
+    await seed('franny');
+    const sheet = useStore.getState().sheet;
+    if (!sheet) throw new Error('no sheet');
+    const twins = sheet.abilities.filter((a) => a.name === 'Twig Attack');
+    expect(twins).toHaveLength(2);
+    for (const twin of twins) {
+      render(<AbilityRow ability={twin} sheet={sheet} state={emptyPlayState()} mode="combat" onUse={() => {}} onAdjust={() => {}} />);
+    }
+    expect(screen.getAllByRole('article', { name: 'Twig Attack' })).toHaveLength(2);
+  });
+
+  it('stops naming the cost once the twin is hidden', async () => {
+    await seed('vlad');
+    useStore.getState().setEdit(ability('Misty Step', 'slot').key, { hidden: true });
+    expect(show('Misty Step').article).toHaveAccessibleName('Misty Step');
+  });
+
+  it('offers Edit under the description of an opened row', async () => {
+    await seed('vlad');
+    const { article, onEdit } = show('Hex', { edit: true });
+    expect(within(article).queryByRole('button', { name: 'Edit Hex' })).toBeNull();
+    await userEvent.click(within(article).getByRole('button', { name: /^Hex/ }));
+    const edit = within(article).getByRole('button', { name: 'Edit Hex' });
+    expect(edit).toHaveTextContent(/^Edit$/);
+    await userEvent.click(edit);
+    expect(onEdit).toHaveBeenCalledWith(ability('Hex'));
+  });
+
+  it('names the Edit button of a twin by its kind of cost', async () => {
+    await seed('vlad');
+    const { article } = show('Misty Step', { cost: 'uses', label: 'Misty Step (free cast)', edit: true });
+    await userEvent.click(within(article).getByRole('button', { name: /^Misty Step/ }));
+    expect(within(article).getByRole('button', { name: 'Edit Misty Step (free cast)' })).toBeInTheDocument();
+  });
+
+  it('has no Edit button when nothing handles it', async () => {
+    await seed('vlad');
+    const { article } = show('Hex');
+    await userEvent.click(within(article).getByRole('button', { name: /^Hex/ }));
+    expect(within(article).queryByRole('button', { name: /^Edit/ })).toBeNull();
+  });
+
+  it('marks an edited row, and only that row', async () => {
+    await seed('vlad');
+    useStore.getState().setEdit(ability('Hex').key, { tags: ['debuff'] });
+    expect(within(show('Hex').article).getByText(/edited/)).toHaveTextContent('pact slot · concentration · debuff · edited');
+    expect(show('Arms of Hadar').article).not.toHaveTextContent('edited');
   });
 
   it('disables Use and gives the reason when the ability is blocked', async () => {

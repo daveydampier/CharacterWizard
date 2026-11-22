@@ -24,8 +24,10 @@ describe('Combat view', () => {
     const names = (group: string) =>
       within(screen.getByRole('region', { name: group })).getAllByRole('article').map((a) => a.getAttribute('aria-label'));
     expect(names('Action').slice(0, 4)).toEqual(['Wurms Claw - Sword', 'Wurms Claw - Axe', 'Wurms Claw - Hammer', 'Unarmed Strike']);
-    expect(names('Bonus Action')).toEqual(['Hex', 'Misty Step', 'Misty Step', 'Pact of the Blade: Conjure', 'Pact of the Blade: Bond']);
-    expect(names('Reaction')).toEqual(['Hellish Rebuke', 'Hellish Rebuke']);
+    expect(names('Bonus Action')).toEqual([
+      'Hex', 'Misty Step (pact slot)', 'Misty Step (free cast)', 'Pact of the Blade: Conjure', 'Pact of the Blade: Bond',
+    ]);
+    expect(names('Reaction')).toEqual(['Hellish Rebuke (pact slot)', 'Hellish Rebuke (free cast)']);
     expect(screen.getByText('No action needed (7)')).toBeInTheDocument();
     expect(screen.getByText('Anyone can do this')).toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'Other' })).toBeNull();
@@ -44,7 +46,8 @@ describe('Combat view', () => {
     expect(use('Arms of Hadar')).toBeDisabled();
     expect(row('Arms of Hadar')).toHaveTextContent('You already spent a spell slot this turn.');
     expect(use('Eldritch Blast')).toBeEnabled();
-    expect(use('Misty Step', 0)).toBeDisabled();
+    expect(use('Misty Step (pact slot)')).toBeDisabled();
+    expect(use('Misty Step (free cast)')).toBeDisabled();
 
     await userEvent.click(screen.getByRole('button', { name: 'Undo' }));
     expect(pill('Bonus Action')).toHaveAttribute('aria-pressed', 'false');
