@@ -4,7 +4,7 @@ import { serial } from './serial';
 import type { AppStorage } from './types';
 
 export { STATE_KEY, SYNCED_KINDS } from './types';
-export type { AppStorage, ItemKind, StoredCharacter, StoredItem, SyncedKind } from './types';
+export type { AppStorage, ItemKind, StoredCharacter, StoredItem, SyncedKind, Update } from './types';
 export { memoryStorage } from './memory';
 export { idbStorage } from './idb';
 export { serial } from './serial';

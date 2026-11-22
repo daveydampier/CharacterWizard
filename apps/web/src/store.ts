@@ -138,23 +138,20 @@ async function loadPlay(id: string): Promise<PlayState> {
 /**
  * Saves a play state as its two items: what is spent (which syncs) and the turn (which does not).
  * An item is written only when it differs from `previous`, so flipping a pill does not touch the
- * synced item. Resolves true when the synced item was written.
+ * synced item. Both writes are started before this returns. Resolves true when the synced item
+ * was written.
  */
 async function savePlay(id: string, next: PlayState, previous: PlayState | null): Promise<boolean> {
-  const items = await storage.listItems(id);
-  const stamp = (kind: 'play' | 'turn'): string =>
-    nextStamp(items.find((item) => item.kind === kind && item.key === STATE_KEY)?.updatedAt);
+  // Stamped and written in one step, later than whatever the device holds at that moment.
+  const write = (kind: 'play' | 'turn', data: unknown, dirty: boolean): Promise<void> =>
+    storage.updateItem(id, kind, STATE_KEY, (current) => ({
+      put: { characterId: id, kind, key: STATE_KEY, data, updatedAt: nextStamp(current?.updatedAt), deleted: false, dirty },
+    }));
   const playChanged = !previous || !same(playItem(next), playItem(previous));
-  if (playChanged) {
-    await storage.putItem({
-      characterId: id, kind: 'play', key: STATE_KEY, data: playItem(next), updatedAt: stamp('play'), deleted: false, dirty: true,
-    });
-  }
-  if (!previous || !same(next.turn, previous.turn)) {
-    await storage.putItem({
-      characterId: id, kind: 'turn', key: STATE_KEY, data: next.turn, updatedAt: stamp('turn'), deleted: false, dirty: false,
-    });
-  }
+  const writes: Promise<void>[] = [];
+  if (playChanged) writes.push(write('play', playItem(next), true));
+  if (!previous || !same(next.turn, previous.turn)) writes.push(write('turn', next.turn, false));
+  await Promise.all(writes);
   return playChanged;
 }
 

@@ -107,6 +107,71 @@ describe.each([
     expect(await storage.getMeta('user')).toBeNull();
   });
 
+  it('looks at an item and writes it in one step', async () => {
+    const storage = await open();
+    await storage.putCharacter(character('a'));
+    const seen: unknown[] = [];
+    await storage.updateItem('a', 'edit', 'spell:1', (current, owner) => {
+      seen.push(current, owner?.id);
+      return { put: item('a', 'edit', 'spell:1', { tags: ['utility'] }) };
+    });
+    await storage.updateItem('a', 'edit', 'spell:1', (current) => {
+      seen.push(current?.data);
+      return 'keep';
+    });
+    expect(seen).toEqual([null, 'a', { tags: ['utility'] }]);
+    expect(await storage.listItems('a')).toEqual([item('a', 'edit', 'spell:1', { tags: ['utility'] })]);
+    await storage.updateItem('a', 'edit', 'spell:1', () => 'remove');
+    expect(await storage.listItems('a')).toEqual([]);
+  });
+
+  it('tells an item update when the device does not hold the character', async () => {
+    const storage = await open();
+    const seen: unknown[] = [];
+    await storage.updateItem('ghost', 'play', 'state', (current, owner) => {
+      seen.push(current, owner);
+      return 'keep';
+    });
+    expect(seen).toEqual([null, null]);
+    expect(await storage.listItems()).toEqual([]);
+  });
+
+  it('looks at a character and writes it in one step, and removes its items with it', async () => {
+    const storage = await open();
+    const seen: unknown[] = [];
+    await storage.updateCharacter('a', (current) => {
+      seen.push(current);
+      return { put: character('a') };
+    });
+    await storage.putItem(item('a', 'play', 'state', 1));
+    await storage.putItem(item('b', 'play', 'state', 2));
+    await storage.updateCharacter('a', (current) => {
+      seen.push(current?.name);
+      return current ? { put: { ...current, name: 'Renamed' } } : 'keep';
+    });
+    expect(seen).toEqual([null, 'Character a']);
+    expect(await storage.listCharacters()).toEqual([character('a', { name: 'Renamed' })]);
+    await storage.updateCharacter('a', () => 'keep');
+    expect(await storage.listCharacters()).toHaveLength(1);
+    await storage.updateCharacter('a', () => 'remove');
+    expect(await storage.listCharacters()).toEqual([]);
+    expect(await storage.listItems()).toEqual([item('b', 'play', 'state', 2)]);
+  });
+
+  it('gives an update a copy, and stores a copy of its answer', async () => {
+    const storage = await open();
+    await storage.putItem(item('a', 'play', 'state', { spent: { pact: 1 } }));
+    await storage.updateItem('a', 'play', 'state', (current) => {
+      (current?.data as { spent: Record<string, number> }).spent.pact = 99;
+      return 'keep';
+    });
+    expect((await storage.listItems('a'))[0].data).toEqual({ spent: { pact: 1 } });
+    const answer = item('a', 'play', 'state', { spent: { pact: 2 } });
+    await storage.updateItem('a', 'play', 'state', () => ({ put: answer }));
+    (answer.data as { spent: Record<string, number> }).spent.pact = 50;
+    expect((await storage.listItems('a'))[0].data).toEqual({ spent: { pact: 2 } });
+  });
+
   it('stores a copy and returns a copy', async () => {
     const storage = await open();
     const given = item('a', 'play', 'state', { spent: { pact: 1 } });
@@ -187,6 +252,29 @@ describe('serial', () => {
     release();
     await Promise.all([write, removal]);
     expect(await storage.listItems()).toEqual([]);
+  });
+
+  it('runs an update after the writes made before it, so it sees them', async () => {
+    const inner = memoryStorage();
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const slow: AppStorage = {
+      ...inner,
+      async putItem(value) {
+        await gate;
+        await inner.putItem(value);
+      },
+    };
+    const storage = serial(slow);
+    const seen: unknown[] = [];
+    const write = storage.putItem(item('a', 'play', 'state', 1));
+    const update = storage.updateItem('a', 'play', 'state', (current) => {
+      seen.push(current?.data);
+      return 'keep';
+    });
+    release();
+    await Promise.all([write, update]);
+    expect(seen).toEqual([1]);
   });
 
   it('keeps going after a call fails, and the failure reaches only its caller', async () => {

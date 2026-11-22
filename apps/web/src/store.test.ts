@@ -121,7 +121,7 @@ describe('saveImported', () => {
   it('keeps the open character\'s unsaved play state when it is re-imported', async () => {
     const storage = memoryStorage();
     const record = await seed('vlad', storage);
-    storage.putItem = async () => { throw new Error('quota'); };
+    storage.updateItem = async () => { throw new Error('quota'); };
     state().use(ability('Hex'), 'combat');
     await settle();
     expect(state().persistent).toBe(false);
@@ -150,7 +150,7 @@ describe('open', () => {
   it('keeps the play state in memory when the open character is opened again', async () => {
     const storage = memoryStorage();
     const record = await seed('vlad', storage);
-    storage.putItem = async () => { throw new Error('quota'); };
+    storage.updateItem = async () => { throw new Error('quota'); };
     state().use(ability('Hex'), 'combat');
     await settle();
     expect(state().persistent).toBe(false);
@@ -309,10 +309,41 @@ describe('play', () => {
     expect((await savedPlay(storage, record.id))?.turn.action).toBe(false);
   });
 
+  it('stamps a tap later than a copy fetched just before the tap is saved', async () => {
+    const storage = memoryStorage();
+    const record = await seed('vlad', storage);
+    const future = new Date(Date.now() + 60_000).toISOString();
+    const { listItems, updateItem } = storage;
+    let landed = false;
+    // A fetched copy lands after the tap and before the tap's own write.
+    const land = async (): Promise<void> => {
+      if (landed) return;
+      landed = true;
+      await storage.putItem({
+        characterId: record.id, kind: 'play', key: 'state', data: { spent: { pact: 2 }, concentrationKey: null },
+        updatedAt: future, deleted: false, dirty: false,
+      });
+    };
+    storage.listItems = async (id?: string) => {
+      const rows = await listItems(id);
+      await land();
+      return rows;
+    };
+    storage.updateItem = async (...args) => {
+      await land();
+      return updateItem(...args);
+    };
+    state().use(ability('Hex'), 'combat');
+    await settle();
+    const saved = (await listItems(record.id)).find((i) => i.kind === 'play');
+    expect(saved).toMatchObject({ data: { spent: { pact: 1 } }, dirty: true });
+    expect(Date.parse(saved?.updatedAt ?? '')).toBeGreaterThan(Date.parse(future));
+  });
+
   it('turns on the not-saving flag when a write fails, and keeps the change', async () => {
     const storage = memoryStorage();
     await seed('vlad', storage);
-    storage.putItem = async () => { throw new Error('quota'); };
+    storage.updateItem = async () => { throw new Error('quota'); };
     state().use(ability('Hex'), 'combat');
     await settle();
     expect(state().persistent).toBe(false);

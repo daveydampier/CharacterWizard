@@ -16,10 +16,12 @@ export function serial(storage: AppStorage): AppStorage {
   return {
     listCharacters: queued(() => storage.listCharacters()),
     putCharacter: queued((character) => storage.putCharacter(character)),
+    updateCharacter: queued((id, decide) => storage.updateCharacter(id, decide)),
     removeCharacter: queued((id) => storage.removeCharacter(id)),
     rekeyCharacter: queued((oldId, character) => storage.rekeyCharacter(oldId, character)),
     listItems: queued((characterId?: string) => storage.listItems(characterId)),
     putItem: queued((item) => storage.putItem(item)),
+    updateItem: queued((characterId, kind, key, decide) => storage.updateItem(characterId, kind, key, decide)),
     removeItem: queued((characterId, kind, key) => storage.removeItem(characterId, kind, key)),
     getMeta: queued((name) => storage.getMeta(name)),
     setMeta: queued((name, value) => storage.setMeta(name, value)),

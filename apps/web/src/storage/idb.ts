@@ -73,6 +73,18 @@ export async function idbStorage(): Promise<AppStorage> {
     async putCharacter(character) {
       await db.put('characters', character);
     },
+    async updateCharacter(id, decide) {
+      const tx = db.transaction(['characters', 'items'], 'readwrite');
+      const characters = tx.objectStore('characters');
+      const update = decide((await characters.get(id)) ?? null);
+      if (update === 'remove') {
+        const keys = await tx.objectStore('items').index('byCharacter').getAllKeys(id);
+        await Promise.all([characters.delete(id), ...keys.map((key) => tx.objectStore('items').delete(key))]);
+      } else if (update !== 'keep') {
+        await characters.put(update.put);
+      }
+      await tx.done;
+    },
     async removeCharacter(id) {
       const tx = db.transaction(['characters', 'items'], 'readwrite');
       const keys = await tx.objectStore('items').index('byCharacter').getAllKeys(id);
@@ -99,6 +111,17 @@ export async function idbStorage(): Promise<AppStorage> {
     },
     async putItem(item) {
       await db.put('items', item);
+    },
+    async updateItem(characterId, kind, key, decide) {
+      const tx = db.transaction(['characters', 'items'], 'readwrite');
+      const items = tx.objectStore('items');
+      const [current, character] = await Promise.all([
+        items.get([characterId, kind, key]), tx.objectStore('characters').get(characterId),
+      ]);
+      const update = decide(current ?? null, character ?? null);
+      if (update === 'remove') await items.delete([characterId, kind, key]);
+      else if (update !== 'keep') await items.put(update.put);
+      await tx.done;
     },
     async removeItem(characterId, kind, key) {
       await db.delete('items', [characterId, kind, key]);
