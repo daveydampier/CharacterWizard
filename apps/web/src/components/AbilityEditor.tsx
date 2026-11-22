@@ -4,6 +4,7 @@ import { useState, type FormEvent } from 'react';
 import { useStore } from '../store';
 import { Dialog } from './Dialog';
 import { RollEditor } from './RollEditor';
+import { rowLabel } from './rowLabel';
 import {
   MAX_USES_ERROR, ShownIn, TagToggles, TimingSelect, UsesFields, checkedRoll, validMaxUses, withViews, type ViewsChosen,
 } from './editorFields';
@@ -137,7 +138,7 @@ export function AbilityEditor({ ability, onClose }: { ability: Ability; onClose:
   );
 
   return (
-    <Dialog title={`Edit ${ability.name}`} onClose={onClose}>
+    <Dialog title={`Edit ${rowLabel(ability, sheet)}`} onClose={onClose}>
       <form onSubmit={save} noValidate className="mt-3 space-y-4">
         {feature ? shownIn : null}
         <TimingSelect value={draft.timing} onChange={(timing) => change({ timing })} allowUnknown={start.timing === 'unknown'} />

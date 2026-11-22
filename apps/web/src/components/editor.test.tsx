@@ -631,10 +631,19 @@ describe('AbilityEditor', () => {
     });
   });
 
-  it('tells twins apart on the Edit button and titles the editor with the name', async () => {
+  it('tells twins apart on the Edit button and in the editor title', async () => {
     await open('vlad');
-    const dialog = await edit('Misty Step (free cast)', 'Misty Step');
+    const dialog = await edit('Misty Step (free cast)');
     expect(within(dialog).getByRole('checkbox', { name: 'Limited uses' })).toBeChecked();
     expect(within(dialog).getByLabelText('Maximum uses')).toHaveValue(3);
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    const other = await edit('Misty Step (pact slot)');
+    expect(within(other).getByText('This ability costs a spell slot.')).toBeInTheDocument();
+  });
+
+  it('titles the editor with the plain name for a row with no twin', async () => {
+    await open('vlad');
+    await edit('Hex');
+    expect(screen.queryByRole('dialog', { name: /Hex \(/ })).toBeNull();
   });
 });
