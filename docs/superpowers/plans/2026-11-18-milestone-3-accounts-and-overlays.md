@@ -9043,7 +9043,7 @@ This repository contains the import, the sheet maths, the turn engine, the web a
 
 The site is static and is built with `pnpm build` into `apps/web/dist`. It needs two values at build time, both public: `VITE_SUPABASE_URL` and `VITE_SUPABASE_KEY` (the project's publishable key). `apps/web/.env.example` lists them.
 
-The database is created from `supabase/migrations` with `pnpm dlx supabase db push`, and the import function is deployed with `pnpm dlx supabase functions deploy import-character`. The function answers only the origins listed in its `ALLOWED_ORIGINS` secret, and only signed-in, approved players.
+The database is created from `supabase/migrations` with `pnpm dlx supabase db push --remote`, and the import function is deployed with `pnpm dlx supabase functions deploy import-character --use-api`. The function answers only the origins listed in its `ALLOWED_ORIGINS` secret, and only signed-in, approved players.
 
 Never commit a Supabase address, a key, a Discord client secret or a database password.
 
@@ -9163,8 +9163,10 @@ If `link` asks for the database password, enter it there.
 - [ ] **Step 3 (owner): Create the database**
 
 ```bash
-pnpm dlx supabase db push
+pnpm dlx supabase db push --remote
 ```
+
+With Supabase CLI 3, `db push` without `--remote` aims at a local database and fails if Docker is not running.
 
 Expected: it lists `20261118000000_accounts_and_sync.sql` and applies it. In the dashboard's Table Editor there are now four tables, `profiles`, `characters`, `character_items` and `import_log`, each marked as having row-level security enabled.
 
@@ -9190,14 +9192,14 @@ The dashboard's labels move from time to time. What matters is that the Discord 
 - [ ] **Step 6 (owner): Deploy the import function and say who may call it**
 
 ```bash
-pnpm dlx supabase functions deploy import-character
+pnpm dlx supabase functions deploy import-character --use-api
 ```
 
 ```bash
 pnpm dlx supabase secrets set ALLOWED_ORIGINS=https://<name>.pages.dev
 ```
 
-An origin is scheme and host only, with no trailing slash. List several with commas and no spaces. If the deploy command says it needs Docker, start Docker Desktop and run it again.
+An origin is scheme and host only, with no trailing slash. List several with commas and no spaces. `--use-api` deploys without Docker; without it the command needs Docker Desktop running.
 
 Then check that the function refuses a caller who is not signed in. Run this in Git Bash, not PowerShell:
 
@@ -9211,7 +9213,9 @@ Expected: `401` and the body `{"status":"unauthorized"}`. If the body instead me
 
 If milestone 2's Task 16 created the Pages project, it builds again when the Part A pull request is merged to `main`: go to Step 8 after the merge.
 
-Otherwise, in the Cloudflare dashboard create a Pages project connected to the GitHub repository `daveydampier/CharacterWizard`:
+Otherwise, in the Cloudflare dashboard create a Pages project connected to the GitHub repository `daveydampier/CharacterWizard`. The dashboard's Create screen opens the form for importing a Worker (project name, build command, deploy command), which is not the one wanted: choose Create application, then Pages, then Connect to Git. If the first deployment says it failed to start, retry it.
+
+The settings:
 
 | Setting | Value |
 |---|---|
@@ -15001,7 +15005,7 @@ The imported sheet is never changed. A player's edits are stored beside it and a
 
 The site is static and is built with `pnpm build` into `apps/web/dist`. It needs two values at build time, both public: `VITE_SUPABASE_URL` and `VITE_SUPABASE_KEY` (the project's publishable key). `apps/web/.env.example` lists them.
 
-The database is created from `supabase/migrations` with `pnpm dlx supabase db push`, and the import function is deployed with `pnpm dlx supabase functions deploy import-character`. The function answers only the origins listed in its `ALLOWED_ORIGINS` secret, and only signed-in, approved players.
+The database is created from `supabase/migrations` with `pnpm dlx supabase db push --remote`, and the import function is deployed with `pnpm dlx supabase functions deploy import-character --use-api`. The function answers only the origins listed in its `ALLOWED_ORIGINS` secret, and only signed-in, approved players.
 
 Never commit a Supabase address, a key, a Discord client secret or a database password.
 

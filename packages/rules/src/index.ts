@@ -9,6 +9,7 @@ export * from './abilities';
 export * from './text';
 export * from './notes';
 export * from './universal';
+export * from './features';
 export * from './sheet';
 export * from './play';
 export * from './normalise';

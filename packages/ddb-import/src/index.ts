@@ -1,12 +1,13 @@
 import type { Character } from '@cw/model';
-import { convertActions } from './actions';
+import { linkedActions } from './actions';
 import { convertClasses } from './classes';
+import { convertFeatures, playLinks } from './features';
 import { convertArmor, convertChargedItems, convertWeapons } from './items';
 import { convertModifiers } from './modifiers';
 import { num, obj, str } from './raw';
 import { baseScores, scoreOverrides } from './scores';
 import { convertSkillCustom } from './skills';
-import { convertSpells } from './spells';
+import { linkedSpells } from './spells';
 
 export { parseCharacterId } from './id';
 
@@ -16,6 +17,8 @@ export function convertCharacter(input: unknown): Character {
   const d = 'data' in outer ? obj(outer.data) : outer;
   const classes = convertClasses(d);
   const level = classes.reduce((sum, c) => sum + c.level, 0);
+  const spells = linkedSpells(d, level);
+  const actions = linkedActions(d);
   return {
     id: num(d.id) ?? 0,
     name: str(d.name),
@@ -28,7 +31,8 @@ export function convertCharacter(input: unknown): Character {
     weapons: convertWeapons(d),
     armor: convertArmor(d),
     chargedItems: convertChargedItems(d),
-    spells: convertSpells(d, level),
-    actions: convertActions(d),
+    spells: spells.map((l) => l.entry),
+    actions: actions.map((l) => l.entry),
+    features: convertFeatures(d, playLinks([...actions, ...spells])),
   };
 }

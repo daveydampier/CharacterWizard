@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react';
 
-export type View = 'combat' | 'explore';
+export type View = 'combat' | 'explore' | 'features';
 
 export type Route =
   | { name: 'home' }
@@ -18,7 +18,7 @@ function decoded(part: string): string | null {
   }
 }
 
-/** "#/c/<id>/explore" and friends. Anything unrecognised is the home screen. */
+/** "#/c/<id>/explore" and friends. Anything unrecognised is the home screen; an unknown view is Combat. */
 export function parseRoute(hash: string): Route {
   const parts = hash.replace(/^#/, '').split('/').filter((part) => part !== '');
   if (parts[0] === 'import' && parts.length === 1) return { name: 'import' };
@@ -26,7 +26,8 @@ export function parseRoute(hash: string): Route {
   if (parts[0] === 'players' && parts.length === 1) return { name: 'players' };
   if (parts[0] === 'c' && parts[1]) {
     const id = decoded(parts[1]);
-    if (id !== null) return { name: 'character', id, view: parts[2] === 'explore' ? 'explore' : 'combat' };
+    const view: View = parts[2] === 'explore' || parts[2] === 'features' ? parts[2] : 'combat';
+    if (id !== null) return { name: 'character', id, view };
   }
   return { name: 'home' };
 }

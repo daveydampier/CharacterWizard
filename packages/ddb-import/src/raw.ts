@@ -55,5 +55,30 @@ export function limitedUseFrom(lu: unknown): LimitedUse | null {
   return { base, ability, addProficiency, reset: resetFrom(l.resetType) };
 }
 
+/** An entry of the converted character, with the sheet component that grants it. */
+export interface Linked<T> {
+  entry: T;
+  /** A componentRef, or null when the sheet names no component. */
+  component: string | null;
+}
+
+/** A value as an ID: a number or a non-empty string. Null for anything else, and for 0, which the sheet uses for none. */
+export const idPart = (v: unknown): string | null => {
+  const n = num(v);
+  const id = n !== null ? String(n) : str(v);
+  return id === '' || id === '0' ? null : id;
+};
+
+/**
+ * "{type}:{id}", the way the sheet names a feature, feat, trait or option: by an entity type ID and
+ * an ID. An action or a spell names the component that grants it the same way. Null when either
+ * part is missing.
+ */
+export function componentRef(typeId: unknown, id: unknown): string | null {
+  const type = idPart(typeId);
+  const own = idPart(id);
+  return type !== null && own !== null ? `${type}:${own}` : null;
+}
+
 export const slug = (s: string): string =>
   s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');

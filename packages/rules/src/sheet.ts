@@ -6,6 +6,7 @@ import { buildAbilities, resources, type Resource } from './abilities';
 import { savingThrows, skillLevel, skills } from './checks';
 import { abilityScores, hasModifier, proficiencyBonus } from './core';
 import { armorClass, attacksPerAction, initiative } from './defence';
+import { featureGroups, type FeatureGroup } from './features';
 import { conditionalNotes, type Note } from './notes';
 import { spellSlots, spellcasting } from './spellcasting';
 import { universalActions } from './universal';
@@ -32,6 +33,8 @@ export interface Sheet {
   /** The actions every character can take. Kept apart from `abilities`, which come from the sheet. */
   universal: Ability[];
   notes: Note[];
+  /** The Features page, in order. Kept apart from `abilities`: nothing here is used or spent. */
+  features: FeatureGroup[];
 }
 
 function saveProficiency(c: Character): Record<AbilityName, boolean> {
@@ -70,5 +73,6 @@ export function buildSheet(c: Character): Sheet {
     abilities: buildAbilities(c),
     universal: universalActions(),
     notes: conditionalNotes(c),
+    features: featureGroups(c),
   };
 }
