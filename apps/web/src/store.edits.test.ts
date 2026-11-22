@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { loadRaw } from '../../../test-utils/fixtures';
 import { memoryStorage, type AppStorage, type StoredItem } from './storage';
 import { editsFrom, newCustomKey, useStore } from './store';
-import { syncOnce } from './sync/engine';
+import { hasUnsynced, syncOnce } from './sync/engine';
 import { TEST_USER, ability, seed, testRemote, testServer } from './test/helpers';
 
 const state = () => useStore.getState();
@@ -295,6 +295,29 @@ describe('re-import with edits', () => {
     await state().saveImported(loadRaw('danger'), record.id);
     const [play] = await itemsOf(storage, record.id, 'play');
     expect(play.data).toMatchObject({ spent: { [wind.key]: 1 } });
+  });
+});
+
+describe('a character the device no longer holds', () => {
+  it.each([
+    ['removed', async (storage: AppStorage, id: string) => storage.removeCharacter(id)],
+    ['marked deleted', async (storage: AppStorage, id: string) => {
+      const [character] = (await storage.listCharacters()).filter((c) => c.id === id);
+      await storage.removeCharacter(id);
+      await storage.putCharacter({ ...character, rawJson: null, deleted: true, dirty: false });
+    }],
+  ])('gets no edit or play change written once it is %s', async (_how, drop) => {
+    const storage = memoryStorage();
+    const record = await seed('danger', storage);
+    await drop(storage, record.id);
+    const wind = ability('Second Wind');
+    state().setEdit(wind.key, { tags: ['healing'] });
+    state().saveCustom(howl());
+    state().use(ability('Second Wind'), 'combat');
+    state().togglePill('bonus');
+    await settle();
+    expect(await storage.listItems(record.id)).toEqual([]);
+    expect(await hasUnsynced(storage)).toBe(false);
   });
 });
 

@@ -192,6 +192,12 @@ async function loadSaved(id: string): Promise<{ play: PlayState; edits: Characte
 }
 
 /**
+ * True when the device no longer holds a character, or holds it only as deleted: nothing more is
+ * written for it. Such an item would never be sent, and would leave the device waiting to sync.
+ */
+const gone = (character: StoredCharacter | null): boolean => character === null || character.deleted;
+
+/**
  * Saves a play state as its two items: what is spent (which syncs) and the turn (which does not).
  * An item is written only when it differs from `previous`, so flipping a pill does not touch the
  * synced item. Both writes are started before this returns. Resolves true when the synced item
@@ -200,7 +206,7 @@ async function loadSaved(id: string): Promise<{ play: PlayState; edits: Characte
 async function savePlay(id: string, next: PlayState, previous: PlayState | null): Promise<boolean> {
   // Stamped and written in one step, later than whatever the device holds at that moment.
   const write = (kind: 'play' | 'turn', data: unknown, dirty: boolean): Promise<void> =>
-    storage.updateItem(id, kind, STATE_KEY, (current) => ({
+    storage.updateItem(id, kind, STATE_KEY, (current, character) => (gone(character) ? 'keep' : {
       put: { characterId: id, kind, key: STATE_KEY, data, updatedAt: nextStamp(current?.updatedAt), deleted: false, dirty },
     }));
   const playChanged = !previous || !same(playItem(next), playItem(previous));
@@ -289,7 +295,7 @@ export const useStore = create<AppStore>()((set, get) => {
     if (playChanged) localChanges += 1;
     set({ edits: next, sheet, play: playChanged ? clamped : play, undo: playChanged ? null : undoFor(get().undo, sheet) });
     const started: Promise<unknown>[] = writes.map((write) =>
-      storage.updateItem(openId, write.kind, write.key, (current) => ({
+      storage.updateItem(openId, write.kind, write.key, (current, character) => (gone(character) ? 'keep' : {
         put: {
           characterId: openId, kind: write.kind, key: write.key, data: write.data,
           updatedAt: nextStamp(current?.updatedAt), deleted: write.data === null, dirty: true,
