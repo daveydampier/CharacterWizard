@@ -10,11 +10,14 @@ describe('parseRoute', () => {
     expect(parseRoute('#/players')).toEqual({ name: 'players' });
     expect(parseRoute('#/c/abc-123/combat')).toEqual({ name: 'character', id: 'abc-123', view: 'combat' });
     expect(parseRoute('#/c/abc-123/explore')).toEqual({ name: 'character', id: 'abc-123', view: 'explore' });
+    expect(parseRoute('#/c/abc-123/features')).toEqual({ name: 'character', id: 'abc-123', view: 'features' });
   });
 
   it('opens Combat when the view is missing or unknown', () => {
     expect(parseRoute('#/c/abc-123')).toEqual({ name: 'character', id: 'abc-123', view: 'combat' });
     expect(parseRoute('#/c/abc-123/nonsense')).toEqual({ name: 'character', id: 'abc-123', view: 'combat' });
+    expect(parseRoute('#/c/abc-123/Features')).toEqual({ name: 'character', id: 'abc-123', view: 'combat' });
+    expect(parseRoute('#/c/abc-123/constructor')).toEqual({ name: 'character', id: 'abc-123', view: 'combat' });
   });
 
   it('sends anything else home', () => {
@@ -39,6 +42,7 @@ describe('routeHref', () => {
       { name: 'home' }, { name: 'import' }, { name: 'about' }, { name: 'players' },
       { name: 'character', id: 'abc-123', view: 'combat' },
       { name: 'character', id: 'abc-123', view: 'explore' },
+      { name: 'character', id: 'abc-123', view: 'features' },
       { name: 'character', id: 'ddb-42-00000000-0000-4000-8000-00000000000a', view: 'combat' },
       { name: 'character', id: 'a/b%c d#e?f', view: 'explore' },
     ];
