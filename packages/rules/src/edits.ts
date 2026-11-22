@@ -2,9 +2,12 @@ import type {
   Ability, AbilityEdit, CharacterEdits, CustomAbility, Roll, Tag, Timing, UsesEdit, ViewName,
 } from '@cw/model';
 import type { Resource } from './abilities';
+import { arrangeFeatures, featureAbility, isFeatureKey } from './features';
 import type { Sheet } from './sheet';
 
-export const emptyEdits = (): CharacterEdits => ({ abilities: {}, custom: [], order: { combat: [], explore: [] } });
+export { sortByOrder, withGroupOrder } from './order';
+
+export const emptyEdits = (): CharacterEdits => ({ abilities: {}, custom: [], order: { combat: [], explore: [], features: [] } });
 
 /** True when an edit changes nothing, so it need not be kept. */
 export const isEmptyEdit = (edit: AbilityEdit): boolean => Object.keys(edit).length === 0;
@@ -13,9 +16,11 @@ const EXPLORE_TAGS: Tag[] = ['utility', 'social', 'movement'];
 
 /**
  * Which views list an ability when the player has not chosen. Combat lists everything that does
- * not take a minute or more. Explore lists what is useful outside a fight.
+ * not take a minute or more. Explore lists what is useful outside a fight. A feature is in neither:
+ * the app never adds one to a view, whatever its timing and tags. Only the player's tick does.
  */
-export function defaultViews(ability: Pick<Ability, 'timing' | 'ritual' | 'tags'>): Record<ViewName, boolean> {
+export function defaultViews(ability: Pick<Ability, 'timing' | 'ritual' | 'tags'> & { key?: string }): Record<ViewName, boolean> {
+  if (ability.key !== undefined && isFeatureKey(ability.key)) return { combat: false, explore: false };
   return {
     combat: ability.timing !== 'long',
     explore: ability.timing === 'long' || ability.ritual || ability.tags.some((t) => EXPLORE_TAGS.includes(t)),
@@ -29,20 +34,17 @@ export function viewsOf(sheet: Sheet, ability: Ability): Record<ViewName, boolea
   return { combat: chosen?.combat ?? fallback.combat, explore: chosen?.explore ?? fallback.explore };
 }
 
-/** `list` with the abilities named in `order` first, in that order; the rest keep their places. */
-export function sortByOrder<T extends { key: string }>(list: T[], order: string[]): T[] {
-  const rank = new Map(order.map((key, index) => [key, index]));
-  const placed = list.filter((a) => rank.has(a.key)).sort((a, b) => (rank.get(a.key) ?? 0) - (rank.get(b.key) ?? 0));
-  return [...placed, ...list.filter((a) => !rank.has(a.key))];
-}
+/** True for a feature that D&D Beyond hides on its own sheet: it starts hidden. False for everything else. */
+export const hiddenByDefault = (sheet: Sheet, key: string): boolean =>
+  sheet.featureSource.list.some((f) => f.key === key && f.hiddenOnSheet);
 
 /**
- * A view's order after the player arranged one group. Only the order within a group matters, so
- * the group's keys are taken out of the list and put back, in their new order, at the end.
+ * `edit` with its row hidden or shown. The choice is recorded only where it differs from what
+ * the row does unasked (`byDefault`), so that hiding and restoring leaves no edit behind.
  */
-export function withGroupOrder(order: string[], groupKeys: string[]): string[] {
-  const moved = new Set(groupKeys);
-  return [...order.filter((key) => !moved.has(key)), ...groupKeys];
+export function withHidden(edit: AbilityEdit | undefined, hidden: boolean, byDefault: boolean): AbilityEdit {
+  const { hidden: _before, ...rest } = edit ?? {};
+  return hidden === byDefault ? rest : { ...rest, hidden };
 }
 
 const escapeHtml = (text: string): string =>
@@ -85,8 +87,11 @@ const usesPool = (ability: Ability, key: string): boolean =>
 
 /**
  * The sheet the views show: the calculated sheet with the player's edits applied. Pure; the
- * calculated sheet is not changed. Edits apply to imported abilities, universal actions and
- * custom abilities alike, by key. An edit whose ability is not on the sheet has no effect.
+ * calculated sheet is not changed. Edits apply to imported abilities, universal actions, custom
+ * abilities and features alike, by key. An edit whose ability is not on the sheet has no effect.
+ *
+ * A feature is hidden and put in order under its own key. One with no ability of its own also
+ * becomes a row in each view the player ticked it into.
  */
 export function applyEdits(sheet: Sheet, edits: CharacterEdits): Sheet {
   const resources = new Map<string, Resource>(sheet.resources.map((r) => [r.key, r]));
@@ -104,8 +109,11 @@ export function applyEdits(sheet: Sheet, edits: CharacterEdits): Sheet {
   const edit = (ability: Ability): Ability => {
     const change = edits.abilities[ability.key];
     if (!change || isEmptyEdit(change)) return ability;
-    edited.push(ability.key);
-    if (change.hidden) hiddenKeys.add(ability.key);
+    const feature = isFeatureKey(ability.key);
+    // A feature's row is there because the player ticked it: only a change to what it says counts as edited.
+    if (!feature || change.timing || change.uses || change.tags || change.roll) edited.push(ability.key);
+    // Whether a feature is hidden is settled below, since one can be hidden with no edit at all.
+    if (change.hidden && !feature) hiddenKeys.add(ability.key);
     if (change.inCombat !== undefined || change.inExplore !== undefined) {
       show[ability.key] = {
         ...(change.inCombat !== undefined ? { combat: change.inCombat } : {}),
@@ -135,23 +143,50 @@ export function applyEdits(sheet: Sheet, edits: CharacterEdits): Sheet {
   const universal = sheet.universal.map(edit);
   const everything = [...all, ...universal];
 
+  const list = sheet.featureSource.list;
+  const hiddenFeatures = list.filter((f) => edits.abilities[f.key]?.hidden ?? f.hiddenOnSheet);
+  const hiddenFeatureKeys = new Set(hiddenFeatures.map((f) => f.key));
+  const featureRows: Record<string, Ability> = {};
+  /** Feature rows that a view lists, and the ones a view would list if the feature were not hidden. */
+  const inPlay: Ability[] = [];
+  const hiddenRows: Ability[] = [];
+  for (const f of list) {
+    // A feature that already has abilities is in play as those, and they are edited where they are listed.
+    if (f.playKeys.length > 0) continue;
+    const row = edit(featureAbility(f));
+    featureRows[f.key] = row;
+    const chosen = show[f.key];
+    if (!chosen?.combat && !chosen?.explore) continue;
+    (hiddenFeatureKeys.has(f.key) ? hiddenRows : inPlay).push(row);
+  }
+
+  const listed = new Set([...everything.filter((a) => !hiddenKeys.has(a.key)), ...inPlay].map((a) => a.key));
+  const spenders = [...everything, ...Object.values(featureRows)];
   const kept: Resource[] = [];
+  const unshown: Resource[] = [];
   for (const resource of resources.values()) {
-    const users = everything.filter((a) => usesPool(a, resource.key));
+    const users = spenders.filter((a) => usesPool(a, resource.key));
     if (released.has(resource.key) && users.length === 0) continue;
-    // A pool whose every user is hidden is noise too.
-    if (users.length > 0 && users.every((a) => hiddenKeys.has(a.key))) continue;
-    kept.push(resource);
+    // A pool that nothing listed spends is noise: its abilities are hidden, or are features in neither view.
+    if (users.length > 0 && !users.some((a) => listed.has(a.key))) unshown.push(resource);
+    else kept.push(resource);
   }
 
   return {
     ...sheet,
     resources: kept,
-    abilities: all.filter((a) => !hiddenKeys.has(a.key)),
+    unshownResources: unshown,
+    abilities: [...all.filter((a) => !hiddenKeys.has(a.key)), ...inPlay],
     universal: universal.filter((a) => !hiddenKeys.has(a.key)),
-    hidden: everything.filter((a) => hiddenKeys.has(a.key)),
+    hidden: [...everything.filter((a) => hiddenKeys.has(a.key)), ...hiddenRows],
+    features: arrangeFeatures(sheet.featureSource, hiddenFeatureKeys, edits.order.features),
+    hiddenFeatures,
+    featureRows,
     edited,
-    layout: { order: { combat: [...edits.order.combat], explore: [...edits.order.explore] }, show },
+    layout: {
+      order: { combat: [...edits.order.combat], explore: [...edits.order.explore], features: [...edits.order.features] },
+      show,
+    },
   };
 }
 
@@ -173,7 +208,7 @@ export const canEditUses = (ability: Ability): boolean => ability.cost.kind !== 
 /** The form for an ability as it stands on `sheet` (which may or may not have edits applied). */
 export function editForm(sheet: Sheet, ability: Ability): EditForm {
   const poolKey = ability.cost.kind === 'uses' ? ability.cost.resourceKey : null;
-  const pool = poolKey === null ? undefined : sheet.resources.find((r) => r.key === poolKey);
+  const pool = poolKey === null ? undefined : [...sheet.resources, ...sheet.unshownResources].find((r) => r.key === poolKey);
   const views = viewsOf(sheet, ability);
   return {
     timing: ability.timing,
@@ -182,7 +217,7 @@ export function editForm(sheet: Sheet, ability: Ability): EditForm {
     roll: ability.roll,
     inCombat: views.combat,
     inExplore: views.explore,
-    hidden: sheet.hidden.some((a) => a.key === ability.key),
+    hidden: sheet.hidden.some((a) => a.key === ability.key) || sheet.hiddenFeatures.some((f) => f.key === ability.key),
   };
 }
 
@@ -204,6 +239,7 @@ export function diffEdit(baseSheet: Sheet, base: Ability, form: EditForm): Abili
   const fallback = defaultViews({ ...base, timing: form.timing, tags: form.tags });
   if (form.inCombat !== fallback.combat) out.inCombat = form.inCombat;
   if (form.inExplore !== fallback.explore) out.inExplore = form.inExplore;
-  if (form.hidden) out.hidden = true;
+  // A feature that D&D Beyond hides starts hidden, so for it the edit is the choice to show it.
+  if (form.hidden !== original.hidden) out.hidden = form.hidden;
   return out;
 }

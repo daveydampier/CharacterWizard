@@ -1,7 +1,7 @@
 import { convertCharacter } from '@cw/ddb-import';
 import type { Character, Feature } from '@cw/model';
 import { describe, expect, it } from 'vitest';
-import { buildSheet, featureGroups, featureLine } from '../src/index';
+import { arrangeFeatures, buildSheet, featureGroups, featureLine, featureSource, hiddenOnSheet } from '../src/index';
 import { SLUGS, loadRaw, type Slug } from '../../../test-utils/fixtures';
 
 const characterOf = (slug: Slug): Character => convertCharacter(loadRaw(slug));
@@ -146,6 +146,36 @@ describe('featureGroups', () => {
   it('is empty for a character with no features', () => {
     expect(featureGroups(character([]))).toEqual([]);
     expect(featureGroups(character([feature('Only hidden', { hiddenOnSheet: true })]))).toEqual([]);
+  });
+});
+
+describe('arrangeFeatures', () => {
+  const source = featureSource(character([
+    feature('A'), feature('B'), feature('Of B', { parentKey: 'feature:1:B' }),
+    feature('Keen', { origin: 'species', originName: 'Gnome' }),
+  ]));
+  const outlineOf = (hidden: string[], order: string[] = []): [string, string[]][] =>
+    arrangeFeatures(source, new Set(hidden), order).map((g) => [
+      g.heading, g.items.flatMap((i) => [i.feature.name, ...i.options.map((o) => `${i.feature.name} > ${o.name}`)]),
+    ]);
+
+  it('lists everything when nothing is hidden, under the headings the character gave', () => {
+    expect(source.headings).toEqual({ feat: 'Feats', species: 'Gnome' });
+    expect(outlineOf([])).toEqual([['Feats', ['A', 'B', 'B > Of B']], ['Gnome', ['Keen']]]);
+  });
+
+  it('leaves out a group whose features are all hidden', () => {
+    expect(outlineOf(['feature:1:Keen'])).toEqual([['Feats', ['A', 'B', 'B > Of B']]]);
+  });
+
+  it('puts the named features first in their group, and an option whose parent is hidden last', () => {
+    expect(outlineOf([], ['feature:1:B', 'feature:1:Keen'])).toEqual([['Feats', ['B', 'B > Of B', 'A']], ['Gnome', ['Keen']]]);
+    expect(outlineOf(['feature:1:B'])).toEqual([['Feats', ['A', 'Of B']], ['Gnome', ['Keen']]]);
+    expect(outlineOf(['feature:1:B'], ['feature:1:Of B'])).toEqual([['Feats', ['Of B', 'A']], ['Gnome', ['Keen']]]);
+  });
+
+  it('knows which features the sheet itself hides', () => {
+    expect([...hiddenOnSheet([feature('Seen'), feature('Unseen', { hiddenOnSheet: true })])]).toEqual(['feature:1:Unseen']);
   });
 });
 

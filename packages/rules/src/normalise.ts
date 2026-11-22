@@ -119,7 +119,8 @@ export function normaliseEdit(data: unknown): AbilityEdit {
   if (roll) edit.roll = roll;
   if (typeof source.inCombat === 'boolean') edit.inCombat = source.inCombat;
   if (typeof source.inExplore === 'boolean') edit.inExplore = source.inExplore;
-  if (source.hidden === true) edit.hidden = true;
+  // False is kept: it is how a feature that D&D Beyond hides is shown again.
+  if (typeof source.hidden === 'boolean') edit.hidden = source.hidden;
   return edit;
 }
 

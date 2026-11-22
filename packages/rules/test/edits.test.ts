@@ -31,7 +31,7 @@ describe('a sheet with no edits', () => {
     const sheet = sheetOf('vlad');
     expect(sheet.hidden).toEqual([]);
     expect(sheet.edited).toEqual([]);
-    expect(sheet.layout).toEqual({ order: { combat: [], explore: [] }, show: {} });
+    expect(sheet.layout).toEqual({ order: { combat: [], explore: [], features: [] }, show: {} });
   });
 
   it('comes back from applyEdits with the same abilities, resources and universal actions', () => {
@@ -52,7 +52,7 @@ describe('applyEdits: one ability', () => {
     applyEdits(sheet, edits({
       abilities: { [hex.key]: { timing: 'action', tags: ['control'], uses: { max: 2, reset: 'long' }, hidden: true } },
       custom: [custom({ cost: { kind: 'uses', max: 1, reset: 'short' } })],
-      order: { combat: [hex.key], explore: [] },
+      order: { combat: [hex.key], explore: [], features: [] },
     }));
     expect(JSON.stringify(sheet)).toBe(before);
   });
@@ -311,7 +311,7 @@ describe('order', () => {
     const sheet = sheetOf('vlad');
     const actions = combatGroups(sheet).action;
     const reversed = [...actions].reverse().map((a) => a.key);
-    const edited = applyEdits(sheet, edits({ order: { combat: reversed, explore: [] } }));
+    const edited = applyEdits(sheet, edits({ order: { combat: reversed, explore: [], features: [] } }));
     expect(combatGroups(edited).action.map((a) => a.key)).toEqual(reversed);
     expect(exploreAbilities(edited).map((a) => a.key)).toEqual(exploreAbilities(sheet).map((a) => a.key));
   });
@@ -319,14 +319,14 @@ describe('order', () => {
   it('puts an ability the order does not mention at the end of its group', () => {
     const sheet = sheetOf('vlad');
     const [first, second, ...rest] = combatGroups(sheet).action;
-    const edited = applyEdits(sheet, edits({ order: { combat: [second.key, first.key], explore: [] } }));
+    const edited = applyEdits(sheet, edits({ order: { combat: [second.key, first.key], explore: [], features: [] } }));
     expect(combatGroups(edited).action.map((a) => a.key)).toEqual([second.key, first.key, ...rest.map((a) => a.key)]);
   });
 
   it('orders the universal group too', () => {
     const sheet = sheetOf('vlad');
     const dodge = named(sheet, 'Dodge');
-    const edited = applyEdits(sheet, edits({ order: { combat: [dodge.key], explore: [] } }));
+    const edited = applyEdits(sheet, edits({ order: { combat: [dodge.key], explore: [], features: [] } }));
     expect(combatGroups(edited).universal[0].name).toBe('Dodge');
   });
 });

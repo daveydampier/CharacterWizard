@@ -1,5 +1,5 @@
 import { convertCharacter } from '@cw/ddb-import';
-import type { Ability, AbilityEdit, CharacterEdits, CustomAbility, PlayState, ViewName } from '@cw/model';
+import type { Ability, AbilityEdit, CharacterEdits, CustomAbility, OrderName, PlayState } from '@cw/model';
 import {
   adjustPool, applyEdits, applyUse, buildSheet, clampState, emptyEdits, emptyPlayState, endConcentration,
   isEmptyEdit, normaliseCustom, normaliseEdit, normaliseOrder, normalisePlayItem, normaliseTurn, pools, rest,
@@ -91,14 +91,14 @@ export interface AppStore {
   togglePill(timing: TurnTiming): void;
   endConcentration(): void;
   undoLast(): void;
-  /** Replaces the open character's edits to one ability. An edit that changes nothing removes them. */
+  /** Replaces the open character's edits to one ability or feature. An edit that changes nothing removes them. */
   setEdit(abilityKey: string, edit: AbilityEdit): void;
   /** Adds a custom ability to the open character, or replaces the one with the same key. */
   saveCustom(custom: CustomAbility): void;
   /** Deletes a custom ability and any edits stored under its key. */
   deleteCustom(abilityKey: string): void;
-  /** Records the order the player gave one group of a view. `groupKeys` is the whole group, in order. */
-  setOrder(view: ViewName, groupKeys: string[]): void;
+  /** Records the order the player gave one group of a view or of the Features page. `groupKeys` is the whole group, in order. */
+  setOrder(view: OrderName, groupKeys: string[]): void;
 }
 
 /** A key for a new custom ability. */
@@ -165,7 +165,7 @@ export function editsFrom(items: StoredItem[]): CharacterEdits {
     } else if (item.kind === 'custom') {
       const custom = normaliseCustom(item.data, item.key);
       if (custom) edits.custom.push(custom);
-    } else if (item.kind === 'order' && (item.key === 'combat' || item.key === 'explore')) {
+    } else if (item.kind === 'order' && (item.key === 'combat' || item.key === 'explore' || item.key === 'features')) {
       edits.order[item.key] = normaliseOrder(item.data);
     }
   }

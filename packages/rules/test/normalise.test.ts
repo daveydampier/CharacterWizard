@@ -99,9 +99,15 @@ describe('normaliseEdit', () => {
     expect(normaliseEdit({ tags: [] })).toEqual({ tags: [] });
   });
 
-  it('bounds a maximum to 1 to 99 and never stores hidden as false', () => {
-    expect(normaliseEdit({ uses: { max: 0, reset: 'long' }, hidden: false })).toEqual({ uses: { max: 1, reset: 'long' } });
+  it('bounds a maximum to 1 to 99', () => {
+    expect(normaliseEdit({ uses: { max: 0, reset: 'long' } })).toEqual({ uses: { max: 1, reset: 'long' } });
     expect(normaliseEdit({ uses: { max: 250.7, reset: 'never' } })).toEqual({ uses: { max: 99, reset: 'never' } });
+  });
+
+  it('keeps hidden as false, which is how a feature that D&D Beyond hides is shown again', () => {
+    expect(normaliseEdit({ hidden: false })).toEqual({ hidden: false });
+    expect(normaliseEdit({ hidden: true })).toEqual({ hidden: true });
+    expect(normaliseEdit({ hidden: 'yes' })).toEqual({});
   });
 });
 

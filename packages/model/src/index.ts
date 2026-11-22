@@ -276,6 +276,9 @@ export interface PlayState {
 /** The two views. Each keeps its own order of abilities. */
 export type ViewName = 'combat' | 'explore';
 
+/** A list the player can put in order: the two views, and the Features page. */
+export type OrderName = ViewName | 'features';
+
 /** A limited-use pool as the player sets it: how many, and when they come back. */
 export interface UsesEdit {
   max: number;
@@ -284,7 +287,8 @@ export interface UsesEdit {
 
 /**
  * A player's changes to one ability, stored beside the imported sheet and applied each time the
- * sheet is built. An absent field means "as imported".
+ * sheet is built. An absent field means "as imported". A feature takes the same edit under its
+ * own key: for a feature, `inCombat` and `inExplore` are what put it in a view at all.
  */
 export interface AbilityEdit {
   timing?: Timing;
@@ -294,6 +298,7 @@ export interface AbilityEdit {
   roll?: Roll;
   inCombat?: boolean;
   inExplore?: boolean;
+  /** Absent, an ability is shown, and a feature is hidden only if D&D Beyond hides it on its own sheet. */
   hidden?: boolean;
 }
 
@@ -318,6 +323,6 @@ export interface CharacterEdits {
   /** By ability key. */
   abilities: Record<string, AbilityEdit>;
   custom: CustomAbility[];
-  /** Ability keys in the order the player arranged them, for each view. */
-  order: Record<ViewName, string[]>;
+  /** Keys in the order the player arranged them: ability keys for each view, feature keys for the Features page. */
+  order: Record<OrderName, string[]>;
 }

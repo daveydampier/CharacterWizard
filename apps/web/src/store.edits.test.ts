@@ -179,6 +179,35 @@ describe('order', () => {
     expect(await itemsOf(storage, record.id, 'order')).toMatchObject([{ key: 'combat', data: reversed, dirty: true }]);
   });
 
+  it('records the order of a group of the Features page, and takes edits under a feature\'s key', async () => {
+    const storage = memoryStorage();
+    const record = await seed('vlad', storage);
+    const key = (name: string): string => {
+      const found = state().sheet?.featureSource.list.find((f) => f.name === name);
+      if (!found) throw new Error(`no feature ${name}`);
+      return found.key;
+    };
+    const feats = (): string[] => names((state().sheet?.features.find((g) => g.heading === 'Feats')?.items ?? []).map((i) => i.feature));
+    state().setOrder('features', [key('Lucky'), key('Alert')]);
+    expect(feats().slice(0, 2)).toEqual(['Lucky', 'Alert']);
+    expect(state().sheet?.layout.order).toEqual({ combat: [], explore: [], features: [key('Lucky'), key('Alert')] });
+    state().setEdit(key('Alert'), { inCombat: true });
+    expect(ability('Alert')).toMatchObject({ key: key('Alert'), timing: 'passive', source: 'feat' });
+    state().setEdit(key('Languages'), { hidden: false });
+    expect(names(state().sheet?.hiddenFeatures ?? [])).toEqual(['Eldritch Invocation Options']);
+    state().setEdit(key('Lucky'), { hidden: true });
+    expect(feats()).not.toContain('Lucky');
+    await settle();
+    expect(await itemsOf(storage, record.id, 'order')).toMatchObject([
+      { key: 'features', data: [key('Lucky'), key('Alert')], dirty: true },
+    ]);
+    // What is stored reads back as what is on screen.
+    expect(editsFrom(await storage.listItems(record.id))).toEqual(state().edits);
+    expect(state().edits.abilities).toEqual({
+      [key('Alert')]: { inCombat: true }, [key('Languages')]: { hidden: false }, [key('Lucky')]: { hidden: true },
+    });
+  });
+
   it('keeps one group\'s order when another group is arranged', async () => {
     await seed('vlad');
     state().setOrder('combat', ['b', 'a']);
@@ -251,7 +280,7 @@ describe('stored edits', () => {
         { key: 'own:1', name: 'Howl', timing: 'unknown', roll: { kind: 'none' }, cost: { kind: 'none' }, tags: [], concentration: false, description: '' },
         { key: 'own:2', name: 'Zeal', timing: 'unknown', roll: { kind: 'none' }, cost: { kind: 'none' }, tags: [], concentration: false, description: '' },
       ],
-      order: { combat: ['a', 'b'], explore: ['c'] },
+      order: { combat: ['a', 'b'], explore: ['c'], features: [] },
     });
   });
 
@@ -263,7 +292,7 @@ describe('stored edits', () => {
       stored('custom', 'own:1', { timing: 'action' }),
       stored('order', 'sideways', ['a']),
       stored('order', 'combat', 'a,b'),
-    ])).toEqual({ abilities: {}, custom: [], order: { combat: [], explore: [] } });
+    ])).toEqual({ abilities: {}, custom: [], order: { combat: [], explore: [], features: [] } });
   });
 });
 
