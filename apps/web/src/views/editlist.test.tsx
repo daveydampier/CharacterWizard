@@ -182,6 +182,29 @@ describe('Edit list', () => {
     expect(state().edits.abilities[key]).toEqual({ tags: ['debuff'] });
   });
 
+  it('keeps the names that tell twins apart when one or both are hidden', async () => {
+    await open('vlad');
+    await arrange();
+    await tap('Hide Misty Step (free cast)');
+    expect(arranged('Bonus Action')).toContain('Misty Step (pact slot)');
+    for (const control of ['Drag', 'Move', 'Edit', 'Hide']) {
+      expect(screen.getAllByRole('button', { name: new RegExp(`^${control} Misty Step`) }).map((b) => b.getAttribute('aria-label')))
+        .toEqual(control === 'Move'
+          ? ['Move Misty Step (pact slot) up', 'Move Misty Step (pact slot) down']
+          : [`${control} Misty Step (pact slot)`]);
+    }
+    expect(button('Restore Misty Step (free cast)')).toBeInTheDocument();
+    await tap('Hide Misty Step (pact slot)');
+    expect(screen.getByText('Hidden (2)')).toBeInTheDocument();
+    expect(button('Restore Misty Step (pact slot)')).toBeInTheDocument();
+    expect(button('Restore Misty Step (free cast)')).toBeInTheDocument();
+    expect(screen.getByText('Misty Step (pact slot)')).toBeInTheDocument();
+    expect(screen.getByText('Misty Step (free cast)')).toBeInTheDocument();
+    await tap('Restore Misty Step (free cast)');
+    expect(arranged('Bonus Action')).toContain('Misty Step (free cast)');
+    expect(button('Restore Misty Step (pact slot)')).toBeInTheDocument();
+  });
+
   it('counts every hidden ability, whichever view hid it', async () => {
     const { show } = await open('vlad');
     await arrange();

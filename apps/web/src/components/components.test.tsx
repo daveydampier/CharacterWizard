@@ -173,10 +173,10 @@ describe('AbilityRow', () => {
     expect(screen.getAllByRole('article', { name: 'Twig Attack' })).toHaveLength(2);
   });
 
-  it('stops naming the cost once the twin is hidden', async () => {
+  it('keeps naming the cost once the twin is hidden', async () => {
     await seed('vlad');
     useStore.getState().setEdit(ability('Misty Step', 'slot').key, { hidden: true });
-    expect(show('Misty Step').article).toHaveAccessibleName('Misty Step');
+    expect(show('Misty Step', { label: 'Misty Step (free cast)' }).article).toHaveAccessibleName('Misty Step (free cast)');
   });
 
   it('offers Edit under the description of an opened row', async () => {

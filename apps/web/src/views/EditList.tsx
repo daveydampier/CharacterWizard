@@ -77,7 +77,7 @@ export function EditList({ view, sheet, onDone }: Props) {
         />
       ))}
 
-      <HiddenDrawer hidden={sheet.hidden} onRestore={(ability) => setHidden(ability.key, false)} />
+      <HiddenDrawer hidden={sheet.hidden} label={(ability) => rowLabel(ability, sheet)} onRestore={(ability) => setHidden(ability.key, false)} />
 
       <div className="mt-4 flex gap-2">
         <button type="button" onClick={add} className="min-h-11 flex-1 rounded-lg border border-slate-400 px-3 py-2 font-medium">

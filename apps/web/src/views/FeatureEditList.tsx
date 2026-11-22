@@ -68,7 +68,7 @@ export function FeatureEditList({ sheet, onDone }: Props) {
         );
       })}
 
-      <HiddenDrawer hidden={sheet.hiddenFeatures} onRestore={(feature) => setHidden(feature, false)} />
+      <HiddenDrawer hidden={sheet.hiddenFeatures} label={(feature) => feature.name} onRestore={(feature) => setHidden(feature, false)} />
 
       <button type="button" onClick={onDone} className="mt-4 min-h-11 w-full rounded-lg bg-slate-900 px-4 py-2 font-medium text-white">
         Done

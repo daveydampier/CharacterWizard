@@ -205,7 +205,10 @@ export function costKind(ability: Ability, sheet: Sheet): string | null {
   if (ability.cost.kind === 'slot') {
     return sheet.pactSlots && Object.keys(sheet.slots).length === 0 ? 'pact slot' : 'spell slot';
   }
-  const pool = usesPool(ability, sheet);
+  // A hidden ability's pool may not be shown, but what kind of cost it has is still what it was.
+  const key = ability.cost.kind === 'uses' ? ability.cost.resourceKey : null;
+  const unshown = sheet.unshownResources.find((r) => r.key === key);
+  const pool = usesPool(ability, sheet) ?? (unshown ? { ...unshown, kind: 'uses' as const } : undefined);
   if (!pool) return null;
   if (pool.key !== ability.key) return `1 charge of ${pool.name}`;
   return ability.source === 'spell' ? 'free cast' : 'limited uses';
