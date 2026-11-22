@@ -18,6 +18,27 @@ describe('componentRef', () => {
   });
 });
 
+describe('componentRef and zero', () => {
+  it('is null when either part is 0, which the sheet uses for none', () => {
+    expect(componentRef(0, 5)).toBeNull();
+    expect(componentRef(5, 0)).toBeNull();
+    expect(componentRef('0', 5)).toBeNull();
+    expect(componentRef(5, '0')).toBeNull();
+    expect(componentRef(0, 0)).toBeNull();
+  });
+
+  it.each(SLUGS)('gives no action or spell a component with a 0 part: %s', (slug) => {
+    const raw = loadRaw(slug);
+    const rows = [...linkedActions(raw.data), ...linkedSpells(raw.data, convertCharacter(raw).level)];
+    for (const { component } of rows) {
+      if (component === null) continue;
+      const [type, id] = component.split(':');
+      expect(type).not.toBe('0');
+      expect(id).not.toBe('0');
+    }
+  });
+});
+
 describe('linkedActions', () => {
   it('says which component grants each action', () => {
     const rows = linkedActions(loadRaw('franny').data);

@@ -318,6 +318,35 @@ describe('features from a sheet no fixture has', () => {
     expect(asTrait[0].key).not.toBe(one[0].key);
   });
 
+  it('treats an ID of 0 as no ID, so the feature gets no key from it and no play rows', () => {
+    const [feature] = convertFeatures({ feats: [{ definition: { id: 0, entityTypeId: 0, name: 'Zero' } }] }, new Map([['0:0', ['action:1:1']]]));
+    expect(feature.key).toMatch(/^feature:anon-[0-9a-f]{8}$/);
+    expect(feature.playKeys).toEqual([]);
+  });
+
+  it('knows a subclass feature when the IDs are strings', () => {
+    const d = sheet();
+    const c = (d.classes as any[])[0];
+    c.subclassDefinition.id = '20';
+    for (const f of c.classFeatures) f.definition.classId = String(f.definition.classId);
+    expect(convertFeatures(d, noLinks).map((f) => [f.origin, f.name])).toEqual([
+      ['class', 'Also first'], ['class', 'First'], ['class', 'Third'], ['subclass', 'Gears'],
+    ]);
+  });
+
+  it('does not match a subclass with no ID to a feature with no class ID', () => {
+    const d = sheet();
+    const c = (d.classes as any[])[0];
+    delete c.subclassDefinition.id;
+    delete c.classFeatures[0].definition.classId;
+    expect(convertFeatures(d, noLinks).map((f) => f.origin)).toEqual(['class', 'class', 'class', 'class']);
+  });
+
+  it('trims a name, and leaves out one that is only spaces', () => {
+    const features = convertFeatures({ feats: [{ definition: { id: 1, entityTypeId: 5, name: '   ' } }, { definition: { id: 2, entityTypeId: 5, name: ' Gift ' } }] }, noLinks);
+    expect(features.map((f) => f.name)).toEqual(['Gift']);
+  });
+
   it('uses the short description when the full one is empty, and defaults the rest', () => {
     const [full, short, none] = convertFeatures({
       feats: [

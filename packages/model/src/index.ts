@@ -172,7 +172,10 @@ export interface SkillCustom {
  * an option chosen within one of those, or the background's own feature. Most have no ability.
  */
 export interface Feature {
-  /** `feature:{entityTypeId}:{id}`. Stable across re-imports. */
+  /**
+   * `feature:{entityTypeId}:{id}`. Stable across re-imports. A feature with no ID has a key of the
+   * form `feature:anon-{hash}`; a second feature with the same key gets `#2` added.
+   */
   key: string;
   name: string;
   origin: 'class' | 'subclass' | 'feat' | 'species' | 'background';
@@ -186,7 +189,7 @@ export interface Feature {
   parentKey: string | null;
   /** From the player's own sheet. HTML. */
   description: string;
-  /** Keys of the abilities the sheet attaches to this feature. */
+  /** Keys of the actions and spells the sheet attaches to this feature. */
   playKeys: string[];
   /** D&D Beyond's own flag: it does not show this entry on its sheet. */
   hiddenOnSheet: boolean;

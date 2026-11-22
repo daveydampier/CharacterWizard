@@ -62,10 +62,11 @@ export interface Linked<T> {
   component: string | null;
 }
 
-const idPart = (v: unknown): string | null => {
+/** A value as an ID: a number or a non-empty string. Null for anything else, and for 0, which the sheet uses for none. */
+export const idPart = (v: unknown): string | null => {
   const n = num(v);
-  if (n !== null) return String(n);
-  return str(v) || null;
+  const id = n !== null ? String(n) : str(v);
+  return id === '' || id === '0' ? null : id;
 };
 
 /**

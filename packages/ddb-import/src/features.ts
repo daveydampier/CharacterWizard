@@ -1,6 +1,6 @@
 import type { Feature } from '@cw/model';
 import { numberDuplicates, textHash } from './keys';
-import { arr, componentRef, num, obj, str, type Linked, type Raw } from './raw';
+import { arr, componentRef, idPart, num, obj, str, type Linked, type Raw } from './raw';
 
 /** A feature being built: the feature, what the sheet calls it, and what it is attached to. */
 interface Draft {
@@ -28,7 +28,7 @@ export function playLinks(rows: Linked<{ key: string }>[]): Map<string, string[]
 
 /** One entry of a feature list. Null when it has no name: there would be nothing to show. */
 function draft(def: Raw, place: Place, description: string, parentRef: string | null, option: boolean): Draft | null {
-  const name = str(def.name);
+  const name = str(def.name).trim();
   if (name === '') return null;
   const ref = componentRef(def.entityTypeId, def.id);
   return {
@@ -48,13 +48,13 @@ function draft(def: Raw, place: Place, description: string, parentRef: string | 
   };
 }
 
-const describe = (def: Raw): string => str(def.description) || str(def.snippet);
+const descriptionOf = (def: Raw): string => str(def.description) || str(def.snippet);
 
 /** A class's features up to the character's level in it, by level, then display order, then position. */
 function classDrafts(c: Raw, classIndex: number): Draft[] {
   const cd = obj(c.definition);
   const sd = obj(c.subclassDefinition);
-  const subclassId = num(sd.id);
+  const subclassId = idPart(sd.id);
   const level = num(c.level) ?? 0;
   return arr(c.classFeatures)
     .map((f, position) => ({ def: obj(obj(f).definition), position }))
@@ -65,14 +65,14 @@ function classDrafts(c: Raw, classIndex: number): Draft[] {
       a.position - b.position)
     .flatMap(({ def }) => {
       // A class feature carries the ID of the class or subclass that defines it.
-      const subclass = subclassId !== null && num(def.classId) === subclassId;
+      const subclass = subclassId !== null && idPart(def.classId) === subclassId;
       const place: Place = {
         origin: subclass ? 'subclass' : 'class',
         originName: str(subclass ? sd.name : cd.name),
         classIndex,
         level: num(def.requiredLevel),
       };
-      return draft(def, place, describe(def), null, false) ?? [];
+      return draft(def, place, descriptionOf(def), null, false) ?? [];
     });
 }
 
@@ -130,16 +130,16 @@ export function convertFeatures(d: Raw, links: ReadonlyMap<string, string[]>): F
   const level = arr(d.classes).reduce((sum: number, c) => sum + (num(obj(c).level) ?? 0), 0);
   const drafts: (Draft | null)[] = [
     ...arr(d.classes).flatMap((c, index) => classDrafts(obj(c), index)),
-    ...arr(d.feats).map((f) => obj(obj(f).definition)).map((def) => draft(def, feat, describe(def), null, false)),
+    ...arr(d.feats).map((f) => obj(obj(f).definition)).map((def) => draft(def, feat, descriptionOf(def), null, false)),
     ...arr(obj(d.race).racialTraits).map((t) => obj(obj(t).definition))
       .filter((def) => (num(def.requiredLevel) ?? 0) <= level)
-      .map((def) => draft(def, species, describe(def), null, false)),
+      .map((def) => draft(def, species, descriptionOf(def), null, false)),
     backgroundDraft(d),
     ...Object.entries(obj(d.options)).flatMap(([group, items]) =>
       arr(items).map((item) => {
         const o = obj(item);
         const def = obj(o.definition);
-        return draft(def, optionPlace(group, d), describe(def), componentRef(o.componentTypeId, o.componentId), true);
+        return draft(def, optionPlace(group, d), descriptionOf(def), componentRef(o.componentTypeId, o.componentId), true);
       })),
   ];
   const kept = drafts.filter((x): x is Draft => x !== null);
