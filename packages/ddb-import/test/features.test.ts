@@ -131,7 +131,8 @@ describe('features from the fixtures', () => {
     const parents = new Set(features.filter((f) => f.parentKey === null).map((f) => f.key));
     const classLevel = character.classes[0].level;
     for (const f of features) {
-      expect(f.key).toMatch(/^feature:\d+:\d+$/);
+      expect(f.key).toMatch(f.parentKey === null ? /^feature:\d+:\d+$/ : /^feature:\d+:\d+@\d+:\d+$/);
+      if (f.parentKey !== null) expect(`feature:${f.key.split('@')[1]}`).toBe(f.parentKey);
       expect(f.name).not.toBe('');
       for (const key of f.playKeys) expect(rows.has(key)).toBe(true);
       if (f.parentKey !== null) expect(parents.has(f.parentKey)).toBe(true);
@@ -304,7 +305,37 @@ describe('features from a sheet no fixture has', () => {
     expect(features.map((f) => [f.key, f.parentKey, f.playKeys])).toEqual([
       ['feature:5:1', null, ['action:1:1']],
       ['feature:5:1#2', null, ['action:1:1']],
-      ['feature:2:8', 'feature:5:1', []],
+      ['feature:2:8@5:1', 'feature:5:1', []],
+    ]);
+  });
+
+  it('gives the same option under two features two keys that do not depend on the sheet\'s order', () => {
+    const under = (parent: number) => ({ componentTypeId: 5, componentId: parent, definition: { id: 8, entityTypeId: 2, name: 'Choice' } });
+    const feats = [
+      { definition: { id: 1, entityTypeId: 5, name: 'First' } },
+      { definition: { id: 2, entityTypeId: 5, name: 'Second' } },
+    ];
+    const keys = (options: unknown[]) =>
+      convertFeatures({ feats, options: { feat: options } }, noLinks)
+        .filter((f) => f.parentKey !== null)
+        .map((f) => [f.parentKey, f.key])
+        .sort();
+    const expected = [['feature:5:1', 'feature:2:8@5:1'], ['feature:5:2', 'feature:2:8@5:2']];
+    expect(keys([under(1), under(2)])).toEqual(expected);
+    expect(keys([under(2), under(1)])).toEqual(expected);
+  });
+
+  it('numbers an option that one feature lists twice, and names the parent of one that is not listed', () => {
+    const option = (parent: number) => ({ componentTypeId: 5, componentId: parent, definition: { id: 8, entityTypeId: 2, name: 'Choice' } });
+    const features = convertFeatures({
+      feats: [{ definition: { id: 1, entityTypeId: 5, name: 'First' } }],
+      options: { feat: [option(1), option(1), option(77)] },
+    }, noLinks);
+    expect(features.map((f) => [f.key, f.parentKey])).toEqual([
+      ['feature:5:1', null],
+      ['feature:2:8@5:1', 'feature:5:1'],
+      ['feature:2:8@5:1#2', 'feature:5:1'],
+      ['feature:2:8@5:77', null],
     ]);
   });
 

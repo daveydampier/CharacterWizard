@@ -31,10 +31,13 @@ function draft(def: Raw, place: Place, description: string, parentRef: string | 
   const name = str(def.name).trim();
   if (name === '') return null;
   const ref = componentRef(def.entityTypeId, def.id);
+  // Without an ID the key comes from what the entry is, so it survives a reordered sheet.
+  const own = ref ?? `anon-${textHash(`${place.origin}|${name}`)}`;
   return {
     feature: {
-      // Without an ID the key comes from what the entry is, so it survives a reordered sheet.
-      key: `feature:${ref ?? `anon-${textHash(`${place.origin}|${name}`)}`}`,
+      // An option's key also names what it is attached to: the same option chosen under two
+      // features is two entries, and which is which must not depend on the sheet's order.
+      key: `feature:${own}${option && parentRef !== null ? `@${parentRef}` : ''}`,
       name,
       ...place,
       parentKey: null,

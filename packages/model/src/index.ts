@@ -177,7 +177,8 @@ export interface SkillCustom {
 export interface Feature {
   /**
    * `feature:{entityTypeId}:{id}`. Stable across re-imports. A feature with no ID has a key of the
-   * form `feature:anon-{hash}`; a second feature with the same key gets `#2` added.
+   * form `feature:anon-{hash}`. An option's key ends `@{entityTypeId}:{id}` of the entry it is
+   * attached to. A second feature with the same key gets `#2` added.
    */
   key: string;
   name: string;
