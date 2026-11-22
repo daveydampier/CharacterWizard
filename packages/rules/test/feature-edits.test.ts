@@ -54,7 +54,7 @@ describe('a sheet with no edits', () => {
   it('never lists a feature in a view unasked, whatever its timing and tags', () => {
     expect(defaultViews({ key: 'feature:1:2', timing: 'action', ritual: true, tags: ['utility'] })).toEqual({ combat: false, explore: false });
     expect(defaultViews({ key: 'action:1:2', timing: 'action', ritual: false, tags: ['utility'] })).toEqual({ combat: true, explore: true });
-    expect(defaultViews({ timing: 'action', ritual: false, tags: [] })).toEqual({ combat: true, explore: false });
+    expect(defaultViews({ key: 'own:new', timing: 'action', ritual: false, tags: [] })).toEqual({ combat: true, explore: false });
   });
 });
 

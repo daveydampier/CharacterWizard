@@ -169,10 +169,11 @@ interface ViewsDraft {
  * A form's draft with `next` applied. A "Shown in" box the player has not set follows the app's
  * rule, so that giving an ability a tag that belongs in Explore lists it there without a second
  * tap. A box the player has set stays where they put it. `row` is the ability being edited: a
- * feature's boxes follow nothing, because the app never lists a feature unasked.
+ * feature's boxes follow nothing, because the app never lists a feature unasked. A new ability
+ * has no key yet, and is given the kind of key it will have.
  */
 export function withViews<D extends ViewsDraft>(
-  draft: D, next: Partial<D>, chosen: ViewsChosen, row: { key?: string; ritual: boolean },
+  draft: D, next: Partial<D>, chosen: ViewsChosen, row: { key: string; ritual: boolean },
 ): { draft: D; chosen: ViewsChosen } {
   const merged: D = { ...draft, ...next };
   const now: ViewsChosen = {

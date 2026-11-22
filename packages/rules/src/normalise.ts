@@ -128,8 +128,13 @@ export function normaliseEdit(data: unknown): AbilityEdit {
   return edit;
 }
 
-/** An ability the player added, or null if it has no name and so cannot be shown. */
+/**
+ * An ability the player added, or null if it cannot be one: it has no name to show, or its key is
+ * not one of the player's own (`own:…`). A key shared with an imported ability, a pool or a
+ * feature would make two things of one key, so such an item is ignored.
+ */
 export function normaliseCustom(data: unknown, key: string): CustomAbility | null {
+  if (typeof key !== 'string' || !key.startsWith('own:')) return null;
   if (!isRecord(data) || typeof data.name !== 'string' || data.name.trim() === '') return null;
   const cost = isRecord(data.cost) ? data.cost : {};
   const uses = cost.kind === 'uses' ? usesEdit(cost) : null;

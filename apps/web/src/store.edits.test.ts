@@ -332,6 +332,16 @@ describe('stored edits', () => {
       stored('order', 'combat', 'a,b'),
     ])).toEqual({ abilities: {}, custom: [], order: { combat: [], explore: [], features: [] } });
   });
+
+  it('leave out a custom ability whose key is not one of the player own', () => {
+    const edits = editsFrom([
+      stored('custom', 'spell:1:2:slot', { name: 'Twin' }),
+      stored('custom', 'pact', { name: 'Pool' }),
+      stored('custom', 'feature:1:2', { name: 'Feature' }),
+      stored('custom', 'own:abc', { name: 'Howl' }),
+    ]);
+    expect(edits.custom.map((c) => c.key)).toEqual(['own:abc']);
+  });
 });
 
 describe('edits and the account', () => {

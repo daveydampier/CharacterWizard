@@ -18,9 +18,10 @@ const EXPLORE_TAGS: Tag[] = ['utility', 'social', 'movement'];
  * Which views list an ability when the player has not chosen. Combat lists everything that does
  * not take a minute or more. Explore lists what is useful outside a fight. A feature is in neither:
  * the app never adds one to a view, whatever its timing and tags. Only the player's tick does.
+ * The key says which of the two this is for, so it must always be given.
  */
-export function defaultViews(ability: Pick<Ability, 'timing' | 'ritual' | 'tags'> & { key?: string }): Record<ViewName, boolean> {
-  if (ability.key !== undefined && isFeatureKey(ability.key)) return { combat: false, explore: false };
+export function defaultViews(ability: Pick<Ability, 'key' | 'timing' | 'ritual' | 'tags'>): Record<ViewName, boolean> {
+  if (isFeatureKey(ability.key)) return { combat: false, explore: false };
   return {
     combat: ability.timing !== 'long',
     explore: ability.timing === 'long' || ability.ritual || ability.tags.some((t) => EXPLORE_TAGS.includes(t)),

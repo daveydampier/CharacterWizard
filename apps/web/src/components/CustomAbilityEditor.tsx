@@ -97,7 +97,7 @@ export function CustomAbilityEditor({ custom, view, onClose }: Props) {
   const [error, setError] = useState<string | null>(null);
 
   const change = (next: Partial<Draft>): void => {
-    const result = withViews(draft, next, chosen, { ritual: false });
+    const result = withViews(draft, next, chosen, { key: custom?.key ?? NEW_KEY, ritual: false });
     setDraft(result.draft);
     setChosen(result.chosen);
     setError(null);

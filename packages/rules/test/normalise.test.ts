@@ -131,14 +131,22 @@ describe('normaliseCustom', () => {
   });
 
   it('keeps a slot cost within levels 1 to 9, and falls back to no cost when the cost is malformed', () => {
-    expect(normaliseCustom({ name: 'A', cost: { kind: 'slot', minLevel: 12 } }, 'k')?.cost).toEqual({ kind: 'slot', minLevel: 9 });
-    expect(normaliseCustom({ name: 'A', cost: { kind: 'slot' } }, 'k')?.cost).toEqual({ kind: 'none' });
-    expect(normaliseCustom({ name: 'A', cost: { kind: 'uses', max: 3 } }, 'k')?.cost).toEqual({ kind: 'none' });
-    expect(normaliseCustom({ name: 'A', cost: 'free' }, 'k')?.cost).toEqual({ kind: 'none' });
+    expect(normaliseCustom({ name: 'A', cost: { kind: 'slot', minLevel: 12 } }, 'own:k')?.cost).toEqual({ kind: 'slot', minLevel: 9 });
+    expect(normaliseCustom({ name: 'A', cost: { kind: 'slot' } }, 'own:k')?.cost).toEqual({ kind: 'none' });
+    expect(normaliseCustom({ name: 'A', cost: { kind: 'uses', max: 3 } }, 'own:k')?.cost).toEqual({ kind: 'none' });
+    expect(normaliseCustom({ name: 'A', cost: 'free' }, 'own:k')?.cost).toEqual({ kind: 'none' });
   });
 
   it.each([null, 'x', {}, { name: '' }, { name: '   ' }, { name: 7 }])('returns null for %j, which has no name to show', (data) => {
-    expect(normaliseCustom(data, 'k')).toBeNull();
+    expect(normaliseCustom(data, 'own:k')).toBeNull();
+  });
+
+  it.each(['spell:1:2:slot', 'pact', 'feature:1:2', '', 'own'])('returns null under the key %j, which is not one of the player own', (key) => {
+    expect(normaliseCustom({ name: 'Howl' }, key)).toBeNull();
+  });
+
+  it('keeps one under a key of the player own', () => {
+    expect(normaliseCustom({ name: 'Howl' }, 'own:abc')?.key).toBe('own:abc');
   });
 });
 
