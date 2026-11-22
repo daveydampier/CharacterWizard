@@ -8,6 +8,7 @@ import { ResourceChips } from '../components/ResourceChips';
 import { useAbilityEdit } from '../components/useAbilityEdit';
 import { useAbilityUse } from '../components/useAbilityUse';
 import { useStore } from '../store';
+import { EditList } from './EditList';
 
 /** One skill or saving throw: a name, a d20 roll and any notes that belong to it. */
 interface CheckRow {
@@ -90,6 +91,8 @@ export function ExploreView({ sheet }: { sheet: Sheet }) {
   const { request, slotSheet } = useAbilityUse('explore');
   const { edit, editor } = useAbilityEdit();
   const [query, setQuery] = useState('');
+  /** True while the player is arranging the list instead of playing from it. */
+  const [arranging, setArranging] = useState(false);
   const needle = query.trim().toLowerCase();
   const matches = (text: string): boolean => needle === '' || text.toLowerCase().includes(needle);
 
@@ -103,6 +106,8 @@ export function ExploreView({ sheet }: { sheet: Sheet }) {
   const shownSaves = saves.filter((row) => matches(row.label));
   const shownAbilities = abilities.filter((a) => matches(a.name));
   const nothing = shownSkills.length + shownSaves.length + shownAbilities.length === 0;
+
+  if (arranging) return <EditList view="explore" sheet={sheet} onDone={() => setArranging(false)} />;
 
   let abilityList: ReactNode = null;
   if (shownAbilities.length > 0) {
@@ -162,6 +167,14 @@ export function ExploreView({ sheet }: { sheet: Sheet }) {
           Long Rest
         </button>
       </div>
+
+      <button
+        type="button"
+        onClick={() => setArranging(true)}
+        className="mt-4 min-h-11 w-full rounded-lg border border-slate-400 px-3 py-2 font-medium"
+      >
+        Edit list
+      </button>
 
       {slotSheet}
       {editor}

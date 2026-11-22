@@ -1,6 +1,6 @@
 import type { Ability } from '@cw/model';
 import { TIMING_LABEL, combatGroups, pools, type Sheet, type TurnTiming } from '@cw/rules';
-import { useMemo, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { AbilityRow } from '../components/AbilityRow';
 import { ConcentrationBanner } from '../components/ConcentrationBanner';
 import { NotesList } from '../components/NotesList';
@@ -8,6 +8,7 @@ import { ResourceChips } from '../components/ResourceChips';
 import { useAbilityEdit } from '../components/useAbilityEdit';
 import { useAbilityUse } from '../components/useAbilityUse';
 import { useStore } from '../store';
+import { EditList } from './EditList';
 
 const TIMINGS: TurnTiming[] = ['action', 'bonus', 'reaction'];
 
@@ -46,6 +47,8 @@ export function CombatView({ sheet }: { sheet: Sheet }) {
   const endConcentration = useStore((s) => s.endConcentration);
   const { request, slotSheet } = useAbilityUse('combat');
   const { edit, editor } = useAbilityEdit();
+  /** True while the player is arranging the list instead of playing from it. */
+  const [arranging, setArranging] = useState(false);
   const groups = useMemo(() => combatGroups(sheet), [sheet]);
   const allPools = useMemo(() => pools(sheet), [sheet]);
 
@@ -62,6 +65,42 @@ export function CombatView({ sheet }: { sheet: Sheet }) {
         onEdit={edit}
       />
     ));
+
+  /** The list as it is played from. While arranging, the Edit list takes its place. */
+  const playing = (
+    <>
+      <Group
+        title="Action"
+        spent={play.turn.action}
+        hint={sheet.attacksPerAction > 1 ? `Attack action: ${sheet.attacksPerAction} attacks` : undefined}
+      >
+        {rows(groups.action)}
+      </Group>
+      <Group title="Bonus Action" spent={play.turn.bonus}>
+        {groups.bonus.length > 0 ? rows(groups.bonus) : <p className="py-2 text-sm text-slate-600">Nothing uses your Bonus Action.</p>}
+      </Group>
+      <Group title="Reaction" spent={play.turn.reaction}>
+        {groups.reaction.length > 0 ? rows(groups.reaction) : <p className="py-2 text-sm text-slate-600">Nothing uses your Reaction.</p>}
+      </Group>
+      {groups.other.length > 0 ? <Group title="Other">{rows(groups.other)}</Group> : null}
+      {groups.free.length > 0 ? <Folded title="No action needed" count={groups.free.length}>{rows(groups.free)}</Folded> : null}
+      {groups.universal.length > 0 ? <Folded title="Anyone can do this">{rows(groups.universal)}</Folded> : null}
+      <Folded title="Keep in mind" count={sheet.notes.length}>
+        <NotesList notes={sheet.notes} empty="No conditional notes on this sheet." />
+      </Folded>
+
+      <button
+        type="button"
+        onClick={() => setArranging(true)}
+        className="mt-4 min-h-11 w-full rounded-lg border border-slate-400 px-3 py-2 font-medium"
+      >
+        Edit list
+      </button>
+
+      {slotSheet}
+      {editor}
+    </>
+  );
 
   return (
     <div>
@@ -89,28 +128,7 @@ export function CombatView({ sheet }: { sheet: Sheet }) {
 
       <ConcentrationBanner sheet={sheet} concentrationKey={play.concentrationKey} onEnd={endConcentration} />
 
-      <Group
-        title="Action"
-        spent={play.turn.action}
-        hint={sheet.attacksPerAction > 1 ? `Attack action: ${sheet.attacksPerAction} attacks` : undefined}
-      >
-        {rows(groups.action)}
-      </Group>
-      <Group title="Bonus Action" spent={play.turn.bonus}>
-        {groups.bonus.length > 0 ? rows(groups.bonus) : <p className="py-2 text-sm text-slate-600">Nothing uses your Bonus Action.</p>}
-      </Group>
-      <Group title="Reaction" spent={play.turn.reaction}>
-        {groups.reaction.length > 0 ? rows(groups.reaction) : <p className="py-2 text-sm text-slate-600">Nothing uses your Reaction.</p>}
-      </Group>
-      {groups.other.length > 0 ? <Group title="Other">{rows(groups.other)}</Group> : null}
-      {groups.free.length > 0 ? <Folded title="No action needed" count={groups.free.length}>{rows(groups.free)}</Folded> : null}
-      {groups.universal.length > 0 ? <Folded title="Anyone can do this">{rows(groups.universal)}</Folded> : null}
-      <Folded title="Keep in mind" count={sheet.notes.length}>
-        <NotesList notes={sheet.notes} empty="No conditional notes on this sheet." />
-      </Folded>
-
-      {slotSheet}
-      {editor}
+      {arranging ? <EditList view="combat" sheet={sheet} onDone={() => setArranging(false)} /> : playing}
     </div>
   );
 }
