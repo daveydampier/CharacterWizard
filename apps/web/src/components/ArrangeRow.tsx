@@ -1,11 +1,12 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import type { ReactNode } from 'react';
 
 const ICON = 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-slate-700 disabled:text-slate-300';
 const TEXT = 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg px-2 text-sm font-medium text-indigo-700';
 
 interface Props {
-  /** The ability's key: what the row is sorted by. */
+  /** The ability's or feature's key: what the row is sorted by. */
   id: string;
   /** The name the row and its buttons are known by. */
   label: string;
@@ -15,13 +16,15 @@ interface Props {
   onStep: (direction: -1 | 1) => void;
   onEdit: () => void;
   onHide: () => void;
+  /** Shown under the row, across its whole width, and dragged with it. */
+  children?: ReactNode;
 }
 
 /**
  * One row while arranging: a handle to drag it by, its name, and buttons that move, edit and hide
  * it. It has no Use button, so nothing is spent by a stray tap.
  */
-export function ArrangeRow({ id, label, first, last, onStep, onEdit, onHide }: Props) {
+export function ArrangeRow({ id, label, first, last, onStep, onEdit, onHide, children }: Props) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id });
 
   return (
@@ -53,6 +56,7 @@ export function ArrangeRow({ id, label, first, last, onStep, onEdit, onHide }: P
         <button type="button" aria-label={`Edit ${label}`} onClick={onEdit} className={TEXT}>Edit</button>
         <button type="button" aria-label={`Hide ${label}`} onClick={onHide} className={TEXT}>Hide</button>
       </span>
+      {children ? <div className="basis-full">{children}</div> : null}
     </li>
   );
 }

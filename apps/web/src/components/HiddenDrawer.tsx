@@ -1,12 +1,10 @@
-import type { Ability } from '@cw/model';
-
-interface Props {
-  hidden: Ability[];
-  onRestore: (ability: Ability) => void;
+interface Props<T> {
+  hidden: T[];
+  onRestore: (row: T) => void;
 }
 
-/** The abilities the player has hidden, folded away, each with a way back. Nothing when none is hidden. */
-export function HiddenDrawer({ hidden, onRestore }: Props) {
+/** The abilities or features that are hidden, folded away, each with a way back. Nothing when none is hidden. */
+export function HiddenDrawer<T extends { key: string; name: string }>({ hidden, onRestore }: Props<T>) {
   if (hidden.length === 0) return null;
   return (
     <details className="mt-4 border-t border-slate-200">

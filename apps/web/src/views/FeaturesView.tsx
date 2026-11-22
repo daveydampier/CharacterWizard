@@ -3,6 +3,7 @@ import { featureLine, type Sheet } from '@cw/rules';
 import { useState } from 'react';
 import { Description } from '../components/Description';
 import { useAbilityEdit } from '../components/useAbilityEdit';
+import { FeatureEditList } from './FeatureEditList';
 
 interface RowProps {
   feature: Feature;
@@ -42,9 +43,17 @@ function FeatureRow({ feature, onEdit }: RowProps) {
 /** What the character has: every feature on the sheet, under a heading for where it comes from. */
 export function FeaturesView({ sheet }: { sheet: Sheet }) {
   const { edit, editor } = useAbilityEdit();
-  if (sheet.features.length === 0) return <p className="py-2 text-sm text-slate-600">This sheet lists no features.</p>;
+  /** True while the player is arranging the list instead of reading it. */
+  const [arranging, setArranging] = useState(false);
+
+  if (sheet.featureSource.list.length === 0) return <p className="py-2 text-sm text-slate-600">This sheet lists no features.</p>;
+  if (arranging) return <FeatureEditList sheet={sheet} onDone={() => setArranging(false)} />;
+
   return (
     <div>
+      {sheet.features.length === 0 ? (
+        <p className="py-2 text-sm text-slate-600">Every feature is hidden. "Edit list" brings them back.</p>
+      ) : null}
       {sheet.features.map((group) => (
         <section key={group.key} aria-label={group.heading} className="mt-4 first:mt-0">
           <h2 className="text-sm font-medium text-slate-700">{group.heading}</h2>
@@ -60,6 +69,15 @@ export function FeaturesView({ sheet }: { sheet: Sheet }) {
           ))}
         </section>
       ))}
+
+      <button
+        type="button"
+        onClick={() => setArranging(true)}
+        className="mt-4 min-h-11 w-full rounded-lg border border-slate-400 px-3 py-2 font-medium"
+      >
+        Edit list
+      </button>
+
       {editor}
     </div>
   );

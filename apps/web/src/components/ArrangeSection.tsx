@@ -3,13 +3,15 @@ import {
   type Announcements, type DragEndEvent, type Modifier, type UniqueIdentifier,
 } from '@dnd-kit/core';
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import type { Ability } from '@cw/model';
+import type { ReactNode } from 'react';
 import { ArrangeRow } from './ArrangeRow';
 
-/** One row of a section: the ability and the name it is known by. */
+/** One row of a section: an ability's or a feature's key, and the name it is known by. */
 export interface ArrangeItem {
-  ability: Ability;
+  key: string;
   label: string;
+  /** Shown under the row and moved with it: a feature's options. */
+  below?: ReactNode;
 }
 
 interface Props {
@@ -17,8 +19,8 @@ interface Props {
   items: ArrangeItem[];
   /** The row with `activeKey` was dropped on, or stepped onto, the row with `overKey`. Both are in this section. */
   onMove: (activeKey: string, overKey: string) => void;
-  onEdit: (ability: Ability) => void;
-  onHide: (ability: Ability) => void;
+  onEdit: (key: string) => void;
+  onHide: (key: string) => void;
 }
 
 /** A dragged row moves up and down only. */
@@ -35,8 +37,8 @@ export function ArrangeSection({ title, items, onMove, onEdit, onHide }: Props) 
     useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
-  const keys = items.map((item) => item.ability.key);
-  const labelOf = (id: UniqueIdentifier): string => items.find((item) => item.ability.key === id)?.label ?? 'the row';
+  const keys = items.map((item) => item.key);
+  const labelOf = (id: UniqueIdentifier): string => items.find((item) => item.key === id)?.label ?? 'the row';
   const place = (id: UniqueIdentifier): string => `position ${keys.indexOf(String(id)) + 1} of ${keys.length}`;
 
   /** What a screen reader says during a drag: the row's name, not its key. */
@@ -63,17 +65,19 @@ export function ArrangeSection({ title, items, onMove, onEdit, onHide }: Props) 
       >
         <SortableContext items={keys} strategy={verticalListSortingStrategy}>
           <ul>
-            {items.map(({ ability, label }, index) => (
+            {items.map(({ key, label, below }, index) => (
               <ArrangeRow
-                key={ability.key}
-                id={ability.key}
+                key={key}
+                id={key}
                 label={label}
                 first={index === 0}
                 last={index === items.length - 1}
-                onStep={(direction) => onMove(ability.key, keys[index + direction])}
-                onEdit={() => onEdit(ability)}
-                onHide={() => onHide(ability)}
-              />
+                onStep={(direction) => onMove(key, keys[index + direction])}
+                onEdit={() => onEdit(key)}
+                onHide={() => onHide(key)}
+              >
+                {below}
+              </ArrangeRow>
             ))}
           </ul>
         </SortableContext>

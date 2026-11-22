@@ -1,5 +1,5 @@
 import { arrayMove } from '@dnd-kit/sortable';
-import type { Ability, ViewName } from '@cw/model';
+import type { ViewName } from '@cw/model';
 import { combatGroups, exploreAbilities, hiddenByDefault, withHidden, type CombatGroupName, type Sheet } from '@cw/rules';
 import { useMemo } from 'react';
 import { ArrangeSection } from '../components/ArrangeSection';
@@ -55,8 +55,8 @@ export function EditList({ view, sheet, onDone }: Props) {
   }, [view, sheet]);
 
   /** A feature that D&D Beyond hides starts hidden, so hiding and restoring record only a choice that differs. */
-  const setHidden = (ability: Ability, hidden: boolean): void =>
-    setEdit(ability.key, withHidden(edits.abilities[ability.key], hidden, hiddenByDefault(sheet, ability.key)));
+  const setHidden = (key: string, hidden: boolean): void =>
+    setEdit(key, withHidden(edits.abilities[key], hidden, hiddenByDefault(sheet, key)));
 
   /** Dragging and the two buttons both end here: the whole section's keys go to the store in their new order. */
   function reorder(keys: string[], activeKey: string, overKey: string): void {
@@ -70,14 +70,14 @@ export function EditList({ view, sheet, onDone }: Props) {
         <ArrangeSection
           key={title}
           title={title}
-          items={abilities.map((ability) => ({ ability, label: rowLabel(ability, sheet) }))}
+          items={abilities.map((ability) => ({ key: ability.key, label: rowLabel(ability, sheet) }))}
           onMove={(activeKey, overKey) => reorder(abilities.map((a) => a.key), activeKey, overKey)}
-          onEdit={edit}
-          onHide={(ability) => setHidden(ability, true)}
+          onEdit={(key) => edit({ key })}
+          onHide={(key) => setHidden(key, true)}
         />
       ))}
 
-      <HiddenDrawer hidden={sheet.hidden} onRestore={(ability) => setHidden(ability, false)} />
+      <HiddenDrawer hidden={sheet.hidden} onRestore={(ability) => setHidden(ability.key, false)} />
 
       <div className="mt-4 flex gap-2">
         <button type="button" onClick={add} className="min-h-11 flex-1 rounded-lg border border-slate-400 px-3 py-2 font-medium">
