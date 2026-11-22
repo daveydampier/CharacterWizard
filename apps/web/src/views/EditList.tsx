@@ -1,6 +1,6 @@
 import { arrayMove } from '@dnd-kit/sortable';
 import type { Ability, ViewName } from '@cw/model';
-import { combatGroups, exploreAbilities, type CombatGroupName, type Sheet } from '@cw/rules';
+import { combatGroups, exploreAbilities, hiddenByDefault, withHidden, type CombatGroupName, type Sheet } from '@cw/rules';
 import { useMemo } from 'react';
 import { ArrangeSection } from '../components/ArrangeSection';
 import { HiddenDrawer } from '../components/HiddenDrawer';
@@ -54,17 +54,14 @@ export function EditList({ view, sheet, onDone }: Props) {
     return all.filter((section) => section.abilities.length > 0);
   }, [view, sheet]);
 
-  const hide = (ability: Ability): void => setEdit(ability.key, { ...(edits.abilities[ability.key] ?? {}), hidden: true });
+  /** A feature that D&D Beyond hides starts hidden, so hiding and restoring record only a choice that differs. */
+  const setHidden = (ability: Ability, hidden: boolean): void =>
+    setEdit(ability.key, withHidden(edits.abilities[ability.key], hidden, hiddenByDefault(sheet, ability.key)));
 
   /** Dragging and the two buttons both end here: the whole section's keys go to the store in their new order. */
   function reorder(keys: string[], activeKey: string, overKey: string): void {
     const next = moved(keys, activeKey, overKey);
     if (next !== keys) setOrder(view, next);
-  }
-
-  function restore(ability: Ability): void {
-    const { hidden: _hidden, ...rest } = edits.abilities[ability.key] ?? {};
-    setEdit(ability.key, rest);
   }
 
   return (
@@ -76,11 +73,11 @@ export function EditList({ view, sheet, onDone }: Props) {
           items={abilities.map((ability) => ({ ability, label: rowLabel(ability, sheet) }))}
           onMove={(activeKey, overKey) => reorder(abilities.map((a) => a.key), activeKey, overKey)}
           onEdit={edit}
-          onHide={hide}
+          onHide={(ability) => setHidden(ability, true)}
         />
       ))}
 
-      <HiddenDrawer hidden={sheet.hidden} onRestore={restore} />
+      <HiddenDrawer hidden={sheet.hidden} onRestore={(ability) => setHidden(ability, false)} />
 
       <div className="mt-4 flex gap-2">
         <button type="button" onClick={add} className="min-h-11 flex-1 rounded-lg border border-slate-400 px-3 py-2 font-medium">

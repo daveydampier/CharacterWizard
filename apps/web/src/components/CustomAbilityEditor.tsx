@@ -78,7 +78,7 @@ export function CustomAbilityEditor({ custom, onClose }: { custom: CustomAbility
   const [error, setError] = useState<string | null>(null);
 
   const change = (next: Partial<Draft>): void => {
-    const result = withViews(draft, next, chosen, false);
+    const result = withViews(draft, next, chosen, { ritual: false });
     setDraft(result.draft);
     setChosen(result.chosen);
     setError(null);

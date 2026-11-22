@@ -132,10 +132,11 @@ interface ViewsDraft {
 /**
  * A form's draft with `next` applied. A "Shown in" box the player has not set follows the app's
  * rule, so that giving an ability a tag that belongs in Explore lists it there without a second
- * tap. A box the player has set stays where they put it.
+ * tap. A box the player has set stays where they put it. `row` is the ability being edited: a
+ * feature's boxes follow nothing, because the app never lists a feature unasked.
  */
 export function withViews<D extends ViewsDraft>(
-  draft: D, next: Partial<D>, chosen: ViewsChosen, ritual: boolean,
+  draft: D, next: Partial<D>, chosen: ViewsChosen, row: { key?: string; ritual: boolean },
 ): { draft: D; chosen: ViewsChosen } {
   const merged: D = { ...draft, ...next };
   const now: ViewsChosen = {
@@ -143,7 +144,7 @@ export function withViews<D extends ViewsDraft>(
     explore: chosen.explore || next.inExplore !== undefined,
   };
   if (next.timing !== undefined || next.tags !== undefined) {
-    const auto = defaultViews({ timing: merged.timing, tags: merged.tags, ritual });
+    const auto = defaultViews({ key: row.key, timing: merged.timing, tags: merged.tags, ritual: row.ritual });
     if (!now.combat) merged.inCombat = auto.combat;
     if (!now.explore) merged.inExplore = auto.explore;
   }
