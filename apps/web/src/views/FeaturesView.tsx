@@ -4,11 +4,11 @@ import { useState } from 'react';
 import { Description } from '../components/Description';
 
 /** One feature: its name, where it comes from, and the description on tap. Nothing here is used or spent. */
-function FeatureRow({ feature, option = false }: { feature: Feature; option?: boolean }) {
+function FeatureRow({ feature }: { feature: Feature }) {
   const [open, setOpen] = useState(false);
   const line = featureLine(feature);
   return (
-    <article aria-label={feature.name} className={`border-t border-slate-200 py-2 ${option ? 'ml-4' : ''}`}>
+    <article aria-label={feature.name} className="border-t border-slate-200 py-2">
       <button type="button" aria-expanded={open} onClick={() => setOpen(!open)} className="min-h-11 w-full text-left">
         <span className="font-medium">{feature.name}</span>
         {feature.playKeys.length > 0 ? (
@@ -32,7 +32,11 @@ export function FeaturesView({ sheet }: { sheet: Sheet }) {
           {group.items.map((item) => (
             <div key={item.feature.key}>
               <FeatureRow feature={item.feature} />
-              {item.options.map((option) => <FeatureRow key={option.key} feature={option} option />)}
+              {item.options.length > 0 ? (
+                <div role="group" aria-label={`${item.feature.name} options`} className="ml-4">
+                  {item.options.map((option) => <FeatureRow key={option.key} feature={option} />)}
+                </div>
+              ) : null}
             </div>
           ))}
         </section>

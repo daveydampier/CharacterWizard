@@ -53,6 +53,20 @@ describe('Features view', () => {
     expect(row('Feats', 'Alert')).toHaveTextContent(/^Alert$/);
   });
 
+  it('groups a feature\'s options, so a screen reader tells them from the feature', async () => {
+    await openFeatures('vlad');
+    const options = within(group('Warlock 3')).getByRole('group', { name: 'Eldritch Invocations options' });
+    expect(within(options).getAllByRole('article').map((r) => r.getAttribute('aria-label'))).toEqual([
+      'Pact of the Blade', 'Armor of Shadows', 'Fiendish Vigor',
+    ]);
+    expect(within(row('Warlock 3', 'Eldritch Invocations')).queryByRole('group')).toBeNull();
+    expect(row('Warlock 3', 'Eldritch Invocations').closest('[role="group"]')).toBeNull();
+    expect(screen.getAllByRole('group').map((g) => g.getAttribute('aria-label'))).toEqual([
+      'Eldritch Invocations options', 'Criminal Ability Score Improvements options',
+    ]);
+    expect(within(group('Feats')).queryByRole('group', { name: 'Lucky options' })).toBeNull();
+  });
+
   it('labels a feature that has rows in play, and only those', async () => {
     await openFeatures('vlad');
     for (const [heading, name] of [['Feats', 'Lucky'], ['Warlock 3', 'Magical Cunning'], ['Warlock 3', 'Pact of the Blade']]) {
