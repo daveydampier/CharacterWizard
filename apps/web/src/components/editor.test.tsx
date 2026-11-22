@@ -461,6 +461,22 @@ describe('AbilityEditor', () => {
     expect(edits()).toEqual({ [key]: { tags: ['healing'] } });
   });
 
+  it('records only what the player changed when the ability changes underneath the open editor', async () => {
+    await open('danger');
+    const key = ability('Second Wind').key;
+    const dialog = await edit('Second Wind');
+    // A level-up, say: a bigger roll, one more use, and (for the sake of the test) a new timing.
+    replaceBase((base) => ({
+      ...base,
+      resources: base.resources.map((r) => (r.key === key ? { ...r, max: 4 } : r)),
+      abilities: base.abilities.map((a) => (a.key === key ? { ...a, timing: 'action', roll: { kind: 'dice', dice: '1d10+12' } } : a)),
+    }));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Healing' }));
+    await save();
+    expect(edits()).toEqual({ [key]: { tags: ['healing'] } });
+    expect(ability('Second Wind')).toMatchObject({ timing: 'action', roll: { kind: 'dice', dice: '1d10+12' }, tags: ['healing'] });
+  });
+
   it('records only the timing when only the timing changes, and the Combat box follows it', async () => {
     await open('vlad');
     const key = ability('Hex').key;

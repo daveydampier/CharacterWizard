@@ -1,5 +1,5 @@
-import type { Ability, ResetType, Roll, UsesEdit } from '@cw/model';
-import { canEditUses, diffEdit, editForm, isFeatureKey, normaliseRoll, type EditForm } from '@cw/rules';
+import type { Ability, ResetType, Roll, Tag, UsesEdit } from '@cw/model';
+import { canEditUses, defaultViews, diffEdit, editForm, isFeatureKey, normaliseRoll, type EditForm } from '@cw/rules';
 import { useState, type FormEvent } from 'react';
 import { useStore } from '../store';
 import { Dialog } from './Dialog';
@@ -16,6 +16,8 @@ interface Draft extends Omit<EditForm, 'uses'> {
   max: number;
   reset: ResetType;
 }
+
+const sameTags = (a: Tag[], b: Tag[]): boolean => a.length === b.length && a.every((t) => b.includes(t));
 
 /**
  * Changes one ability from the sheet: when it is used, what it costs, how it is tagged, where it
@@ -52,7 +54,10 @@ export function AbilityEditor({ ability, onClose }: { ability: Ability; onClose:
 
   function save(event: FormEvent): void {
     event.preventDefault();
-    if (!baseSheet || !start || !draft || !base) return;
+    if (!sheet || !baseSheet || !start || !draft || !base) return;
+    // Only what the player changed is taken from the form. Everything else is read from the
+    // ability as it stands now, which a sync or a re-import may have changed since the form opened.
+    const now = editForm(sheet, ability);
     const draftUses: UsesEdit | null = draft.limited ? { max: draft.max, reset: draft.reset } : null;
     const usesChanged = draftUses === null || start.uses === null
       ? draftUses !== start.uses
@@ -62,20 +67,29 @@ export function AbilityEditor({ ability, onClose }: { ability: Ability; onClose:
       setError(MAX_USES_ERROR);
       return;
     }
-    // A roll the player did not touch is kept exactly as it is; one they changed must be a finished roll.
-    const roll: Roll | null = draft.roll === start.roll ? draft.roll : normaliseRoll(draft.roll);
-    if (!roll) {
+    // A roll the player did not touch is taken as it stands now; one they changed must be a finished roll.
+    const changedRoll: Roll | null = draft.roll === start.roll ? null : normaliseRoll(draft.roll);
+    if (draft.roll !== start.roll && !changedRoll) {
       setError(ROLL_ERROR);
       return;
     }
+    const timing = draft.timing !== start.timing ? draft.timing : now.timing;
+    const tags = sameTags(draft.tags, start.tags) ? now.tags : draft.tags;
+    /**
+     * A box the player has not set follows the app's rule for the saved timing and tags, so
+     * nothing is recorded for it. One they set is taken from the form where it changed.
+     */
+    const rule = defaultViews({ ...ability, timing, tags });
+    const view = (name: 'combat' | 'explore', drafted: boolean, started: boolean, current: boolean): boolean =>
+      !chosen[name] ? rule[name] : drafted !== started ? drafted : current;
     const form: EditForm = {
-      timing: draft.timing,
-      uses: usesEditable ? (usesChanged ? draftUses : start.uses) : null,
-      tags: draft.tags,
-      roll,
-      inCombat: draft.inCombat,
-      inExplore: draft.inExplore,
-      hidden: draft.hidden,
+      timing,
+      uses: usesEditable ? (usesChanged ? draftUses : now.uses) : null,
+      tags,
+      roll: changedRoll ?? now.roll,
+      inCombat: view('combat', draft.inCombat, start.inCombat, now.inCombat),
+      inExplore: view('explore', draft.inExplore, start.inExplore, now.inExplore),
+      hidden: draft.hidden !== start.hidden ? draft.hidden : now.hidden,
     };
     setEdit(ability.key, diffEdit(baseSheet, base, form));
     onClose();
