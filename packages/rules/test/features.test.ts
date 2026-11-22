@@ -1,7 +1,9 @@
 import { convertCharacter } from '@cw/ddb-import';
 import type { Character, Feature } from '@cw/model';
 import { describe, expect, it } from 'vitest';
-import { arrangeFeatures, buildSheet, featureGroups, featureLine, featureSource, hiddenOnSheet } from '../src/index';
+import {
+  arrangeFeatures, buildSheet, featureGroups, featureLabels, featureLine, featureSource, hiddenOnSheet,
+} from '../src/index';
 import { SLUGS, loadRaw, type Slug } from '../../../test-utils/fixtures';
 
 const characterOf = (slug: Slug): Character => convertCharacter(loadRaw(slug));
@@ -199,5 +201,56 @@ describe('the sheet', () => {
     const sheet = buildSheet(c);
     expect(sheet.features).toEqual(featureGroups(c));
     expect(sheet.features.length).toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe('featureLabels', () => {
+  /** The labels with these features hidden; by default, the ones the sheet itself hides. */
+  const labelsOf = (c: Character, hidden: Feature[] = c.features.filter((f) => f.hiddenOnSheet)) => {
+    const source = featureSource(c);
+    return featureLabels(arrangeFeatures(source, new Set(hidden.map((f) => f.key))), hidden, source);
+  };
+  /** The labels that are not the plain name, in sheet order. */
+  const bracketed = (c: Character, labels: Record<string, string>): string[] =>
+    c.features.filter((f) => f.key in labels && labels[f.key] !== f.name).map((f) => labels[f.key]);
+
+  it('tells twins apart by parent, class line or heading, and leaves every other name alone', () => {
+    const c = characterOf('danger');
+    const labels = labelsOf(c);
+    expect(bracketed(c, labels)).toEqual([
+      'Weapon Mastery (Fighter, level 1)', '4: Weapon Mastery (Fighter, level 4)', 'Weapon Mastery (Feats)',
+      '4: Weapon Mastery (Feats)', 'Intelligence (Otherworldly Presence)', 'Intelligence (Fiendish Legacy Spells)',
+    ]);
+    expect(new Set(Object.values(labels)).size).toBe(Object.keys(labels).length);
+  });
+
+  it('labels every feature on the page and in the drawer, and nothing else', () => {
+    for (const slug of SLUGS) {
+      const c = characterOf(slug);
+      expect(Object.keys(labelsOf(c)).sort()).toEqual(c.features.map((f) => f.key).sort());
+    }
+  });
+
+  it('counts a twin in the drawer, so hiding one does not rename the other', () => {
+    const c = characterOf('danger');
+    const intelligence = c.features.filter((f) => f.name === 'Intelligence');
+    const labels = labelsOf(c, [...c.features.filter((f) => f.hiddenOnSheet), intelligence[0]]);
+    expect(intelligence.map((f) => labels[f.key])).toEqual(['Intelligence (Otherworldly Presence)', 'Intelligence (Fiendish Legacy Spells)']);
+  });
+
+  it('numbers twins that nothing else tells apart, the later ones in page order', () => {
+    const c = character([feature('Keen Nose', { key: 'feature:1:a' }), feature('Keen Nose', { key: 'feature:1:b' }), feature('Keen Nose', { key: 'feature:1:c' })]);
+    expect(Object.values(labelsOf(c, []))).toEqual(['Keen Nose (Feats)', 'Keen Nose (Feats) 2', 'Keen Nose (Feats) 3']);
+  });
+
+  it('uses the class line for a class feature, and the heading for one with no level', () => {
+    const c = character([
+      feature('Tough Hide', { key: 'feature:1:a', origin: 'class', originName: 'Fighter', classIndex: 0, level: 3 }),
+      feature('Tough Hide', { key: 'feature:1:b', origin: 'species', originName: 'Lizardfolk' }),
+      feature('Gills', { key: 'feature:1:c', origin: 'species', originName: 'Lizardfolk' }),
+    ], [{ name: 'Fighter', level: 5 }]);
+    expect(labelsOf(c, [])).toEqual({
+      'feature:1:a': 'Tough Hide (Fighter, level 3)', 'feature:1:b': 'Tough Hide (Lizardfolk)', 'feature:1:c': 'Gills',
+    });
   });
 });

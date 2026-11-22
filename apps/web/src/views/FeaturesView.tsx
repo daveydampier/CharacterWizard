@@ -1,21 +1,24 @@
 import type { Feature } from '@cw/model';
 import { featureLine, type Sheet } from '@cw/rules';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Description } from '../components/Description';
+import { featureLabeller } from '../components/featureLabel';
 import { useAbilityEdit } from '../components/useAbilityEdit';
 import { FeatureEditList } from './FeatureEditList';
 
 interface RowProps {
   feature: Feature;
+  /** The name the row and its Edit button are known by; what the row says is the plain name. */
+  label: string;
   onEdit: (feature: Feature) => void;
 }
 
 /** One feature: its name, where it comes from, and on tap the description and Edit. Nothing here is used or spent. */
-function FeatureRow({ feature, onEdit }: RowProps) {
+function FeatureRow({ feature, label, onEdit }: RowProps) {
   const [open, setOpen] = useState(false);
   const line = featureLine(feature);
   return (
-    <article aria-label={feature.name} className="border-t border-slate-200 py-2">
+    <article aria-label={label} className="border-t border-slate-200 py-2">
       <button type="button" aria-expanded={open} onClick={() => setOpen(!open)} className="min-h-11 w-full text-left">
         <span className="font-medium">{feature.name}</span>
         {feature.playKeys.length > 0 ? (
@@ -28,7 +31,7 @@ function FeatureRow({ feature, onEdit }: RowProps) {
           <Description html={feature.description} />
           <button
             type="button"
-            aria-label={`Edit ${feature.name}`}
+            aria-label={`Edit ${label}`}
             onClick={() => onEdit(feature)}
             className="mt-2 inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-slate-400 bg-white px-3 py-1.5 text-sm font-medium"
           >
@@ -45,6 +48,8 @@ export function FeaturesView({ sheet }: { sheet: Sheet }) {
   const { edit, editor } = useAbilityEdit();
   /** True while the player is arranging the list instead of reading it. */
   const [arranging, setArranging] = useState(false);
+  /** Two features with the same name are told apart by what their rows and buttons are called. */
+  const labelOf = useMemo(() => featureLabeller(sheet), [sheet]);
 
   if (sheet.featureSource.list.length === 0) return <p className="py-2 text-sm text-slate-600">This sheet lists no features.</p>;
   if (arranging) return <FeatureEditList sheet={sheet} onDone={() => setArranging(false)} />;
@@ -59,10 +64,10 @@ export function FeaturesView({ sheet }: { sheet: Sheet }) {
           <h2 className="text-sm font-medium text-slate-700">{group.heading}</h2>
           {group.items.map((item) => (
             <div key={item.feature.key}>
-              <FeatureRow feature={item.feature} onEdit={edit} />
+              <FeatureRow feature={item.feature} label={labelOf(item.feature)} onEdit={edit} />
               {item.options.length > 0 ? (
-                <div role="group" aria-label={`${item.feature.name} options`} className="ml-4">
-                  {item.options.map((option) => <FeatureRow key={option.key} feature={option} onEdit={edit} />)}
+                <div role="group" aria-label={`${labelOf(item.feature)} options`} className="ml-4">
+                  {item.options.map((option) => <FeatureRow key={option.key} feature={option} label={labelOf(option)} onEdit={edit} />)}
                 </div>
               ) : null}
             </div>

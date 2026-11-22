@@ -144,3 +144,43 @@ describe('Edit list on the Features page', () => {
     expect(read('Feats')).toEqual(['Alert']);
   });
 });
+
+describe('features with the same name', () => {
+  const labels = (pattern: RegExp) =>
+    screen.getAllByRole('button', { name: pattern }).map((b) => b.getAttribute('aria-label'));
+
+  it('are told apart on Edit and Hide while arranging, and in the drawer once hidden', async () => {
+    await open('danger');
+    await arrange();
+    expect(labels(/^Edit Intelligence/)).toEqual(['Edit Intelligence (Otherworldly Presence)', 'Edit Intelligence (Fiendish Legacy Spells)']);
+    expect(labels(/^Hide Intelligence/)).toEqual(['Hide Intelligence (Otherworldly Presence)', 'Hide Intelligence (Fiendish Legacy Spells)']);
+    expect(labels(/^Edit Weapon Mastery/)).toEqual(['Edit Weapon Mastery (Fighter, level 1)', 'Edit Weapon Mastery (Feats)']);
+    expect(labels(/^Move Weapon Mastery \(Feats\)/)).toEqual(['Move Weapon Mastery (Feats) up', 'Move Weapon Mastery (Feats) down']);
+    // What a row says stays the plain name: the heading above it tells them apart.
+    expect(screen.getAllByText('Weapon Mastery', { exact: true })).toHaveLength(2);
+    expect(screen.getByRole('group', { name: 'Otherworldly Presence options' })).toBeInTheDocument();
+
+    await tap('Hide Intelligence (Otherworldly Presence)');
+    expect(labels(/^Hide Intelligence/)).toEqual(['Hide Intelligence (Fiendish Legacy Spells)']);
+    await tap('Hide Intelligence (Fiendish Legacy Spells)');
+    expect(labels(/^Restore Intelligence/)).toEqual(['Restore Intelligence (Otherworldly Presence)', 'Restore Intelligence (Fiendish Legacy Spells)']);
+    expect(screen.getByText('Intelligence (Otherworldly Presence)')).toBeInTheDocument();
+  });
+
+  it('are told apart while reading, on the row and its Edit button', async () => {
+    await open('danger');
+    expect(screen.getAllByRole('article', { name: /^Weapon Mastery/ }).map((a) => a.getAttribute('aria-label')))
+      .toEqual(['Weapon Mastery (Fighter, level 1)', 'Weapon Mastery (Feats)']);
+    const row = screen.getByRole('article', { name: 'Intelligence (Fiendish Legacy Spells)' });
+    await userEvent.click(within(row).getAllByRole('button')[0]);
+    expect(within(row).getByRole('button', { name: 'Edit Intelligence (Fiendish Legacy Spells)' })).toBeInTheDocument();
+  });
+
+  it('leave a feature with no twin its plain name', async () => {
+    await open('danger');
+    expect(screen.getByRole('article', { name: 'Action Surge' })).toBeInTheDocument();
+    await arrange();
+    expect(screen.getByRole('button', { name: 'Edit Action Surge' })).toBeInTheDocument();
+    expect(screen.getByRole('listitem', { name: 'Action Surge' })).toBeInTheDocument();
+  });
+});

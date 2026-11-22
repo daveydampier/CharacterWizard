@@ -105,6 +105,43 @@ export function featureLine(f: Feature): string | null {
   return f.originName !== '' ? `${f.originName}, level ${f.level}` : `Level ${f.level}`;
 }
 
+/**
+ * The name each feature on the Features page and in its "Hidden" drawer is known by, by key. It
+ * is the feature's name, unless another of them has the same name; then it adds in brackets what
+ * tells them apart: an option's parent ("Intelligence (Otherworldly Presence)"), a class or
+ * subclass feature's line ("Weapon Mastery (Fighter, level 1)"), or else its group's heading
+ * ("Weapon Mastery (Feats)"). Labels that are still the same are numbered, the later ones in
+ * page order and then drawer order: "X 2", "X 3".
+ */
+export function featureLabels(page: FeatureGroup[], hidden: Feature[], source: FeatureSource): Record<string, string> {
+  const listed = [...page.flatMap((g) => g.items.flatMap((item) => [item.feature, ...item.options])), ...hidden];
+  const count = new Map<string, number>();
+  for (const f of listed) count.set(f.name, (count.get(f.name) ?? 0) + 1);
+  const byKey = new Map(source.list.map((f) => [f.key, f]));
+
+  const telling = (f: Feature): string | null => {
+    const parent = f.parentKey === null ? undefined : byKey.get(f.parentKey);
+    if (parent) return parent.name;
+    const line = f.origin === 'class' || f.origin === 'subclass' ? featureLine(f) : null;
+    if (line) return line;
+    const head = source.headings[groupKey(f)] ?? '';
+    return head !== '' ? head : null;
+  };
+
+  const out: Record<string, string> = {};
+  const used = new Set<string>();
+  for (const f of listed) {
+    if (f.key in out) continue;
+    const extra = (count.get(f.name) ?? 0) > 1 ? telling(f) : null;
+    const label = extra ? `${f.name} (${extra})` : f.name;
+    let unique = label;
+    for (let n = 2; used.has(unique); n += 1) unique = `${label} ${n}`;
+    used.add(unique);
+    out[f.key] = unique;
+  }
+  return out;
+}
+
 /** Every feature key starts this way, and no ability key does. */
 export const isFeatureKey = (key: string): boolean => key.startsWith('feature:');
 

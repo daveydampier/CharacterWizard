@@ -10,6 +10,8 @@ interface Props {
   id: string;
   /** The name the row and its buttons are known by. */
   label: string;
+  /** What the row says, where that is not its label: a feature's plain name under its heading. */
+  text?: string;
   first: boolean;
   last: boolean;
   /** -1 moves the row up one place, 1 down one. */
@@ -24,7 +26,7 @@ interface Props {
  * One row while arranging: a handle to drag it by, its name, and buttons that move, edit and hide
  * it. It has no Use button, so nothing is spent by a stray tap.
  */
-export function ArrangeRow({ id, label, first, last, onStep, onEdit, onHide, children }: Props) {
+export function ArrangeRow({ id, label, text = label, first, last, onStep, onEdit, onHide, children }: Props) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id });
 
   return (
@@ -45,7 +47,7 @@ export function ArrangeRow({ id, label, first, last, onStep, onEdit, onHide, chi
       >
         <span aria-hidden="true">⠿</span>
       </button>
-      <span className="min-w-0 flex-1 font-medium">{label}</span>
+      <span className="min-w-0 flex-1 font-medium">{text}</span>
       <span className="ml-auto flex items-center">
         <button type="button" aria-label={`Move ${label} up`} disabled={first} onClick={() => onStep(-1)} className={ICON}>
           <span aria-hidden="true">▲</span>

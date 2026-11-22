@@ -1,7 +1,9 @@
 import type { Feature } from '@cw/model';
 import { withHidden, type FeatureItem, type Sheet } from '@cw/rules';
+import { useMemo } from 'react';
 import { ArrangeSection } from '../components/ArrangeSection';
 import { HiddenDrawer } from '../components/HiddenDrawer';
+import { featureLabeller } from '../components/featureLabel';
 import { useAbilityEdit } from '../components/useAbilityEdit';
 import { useStore } from '../store';
 import { moved } from './EditList';
@@ -24,6 +26,8 @@ export function FeatureEditList({ sheet, onDone }: Props) {
   const setEdit = useStore((s) => s.setEdit);
   const setOrder = useStore((s) => s.setOrder);
   const { edit, editor } = useAbilityEdit();
+  /** Two features with the same name are told apart by what their buttons are called. */
+  const labelOf = useMemo(() => featureLabeller(sheet), [sheet]);
 
   /** A feature that D&D Beyond hides starts hidden, so only a choice that differs from that is recorded. */
   const setHidden = (feature: Feature, hidden: boolean): void =>
@@ -41,12 +45,12 @@ export function FeatureEditList({ sheet, onDone }: Props) {
 
   const options = ({ feature, options: chosen }: FeatureItem) =>
     chosen.length === 0 ? undefined : (
-      <div role="group" aria-label={`${feature.name} options`} className="ml-11">
+      <div role="group" aria-label={`${labelOf(feature)} options`} className="ml-11">
         {chosen.map((option) => (
           <div key={option.key} className="flex items-center gap-x-1 border-t border-slate-200">
             <span className="min-w-0 flex-1">{option.name}</span>
-            <button type="button" aria-label={`Edit ${option.name}`} onClick={() => edit(option)} className={TEXT}>Edit</button>
-            <button type="button" aria-label={`Hide ${option.name}`} onClick={() => setHidden(option, true)} className={TEXT}>Hide</button>
+            <button type="button" aria-label={`Edit ${labelOf(option)}`} onClick={() => edit(option)} className={TEXT}>Edit</button>
+            <button type="button" aria-label={`Hide ${labelOf(option)}`} onClick={() => setHidden(option, true)} className={TEXT}>Hide</button>
           </div>
         ))}
       </div>
@@ -60,7 +64,7 @@ export function FeatureEditList({ sheet, onDone }: Props) {
           <ArrangeSection
             key={group.key}
             title={group.heading}
-            items={group.items.map((item) => ({ key: item.feature.key, label: item.feature.name, below: options(item) }))}
+            items={group.items.map((item) => ({ key: item.feature.key, label: labelOf(item.feature), text: item.feature.name, below: options(item) }))}
             onMove={(activeKey, overKey) => reorder(keys, activeKey, overKey)}
             onEdit={(key) => edit({ key })}
             onHide={hide}
@@ -68,7 +72,7 @@ export function FeatureEditList({ sheet, onDone }: Props) {
         );
       })}
 
-      <HiddenDrawer hidden={sheet.hiddenFeatures} label={(feature) => feature.name} onRestore={(feature) => setHidden(feature, false)} />
+      <HiddenDrawer hidden={sheet.hiddenFeatures} label={labelOf} onRestore={(feature) => setHidden(feature, false)} />
 
       <button type="button" onClick={onDone} className="mt-4 min-h-11 w-full rounded-lg bg-slate-900 px-4 py-2 font-medium text-white">
         Done

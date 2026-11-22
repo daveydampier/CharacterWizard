@@ -10,6 +10,8 @@ import { ArrangeRow } from './ArrangeRow';
 export interface ArrangeItem {
   key: string;
   label: string;
+  /** What the row says, where that is not its label. */
+  text?: string;
   /** Shown under the row and moved with it: a feature's options. */
   below?: ReactNode;
 }
@@ -65,11 +67,12 @@ export function ArrangeSection({ title, items, onMove, onEdit, onHide }: Props) 
       >
         <SortableContext items={keys} strategy={verticalListSortingStrategy}>
           <ul>
-            {items.map(({ key, label, below }, index) => (
+            {items.map(({ key, label, text, below }, index) => (
               <ArrangeRow
                 key={key}
                 id={key}
                 label={label}
+                text={text}
                 first={index === 0}
                 last={index === items.length - 1}
                 onStep={(direction) => onMove(key, keys[index + direction])}

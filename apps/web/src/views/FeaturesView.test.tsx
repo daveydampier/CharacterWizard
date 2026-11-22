@@ -79,8 +79,9 @@ describe('Features view', () => {
 
   it('shows a feature the sheet lists twice once', async () => {
     await openFeatures('franny');
-    expect(within(group('Barbarian 3')).getAllByRole('article', { name: 'Rage' })).toHaveLength(1);
-    expect(within(row('Barbarian 3', 'Rage')).getByText('In play')).toBeInTheDocument();
+    // The copy the sheet hides is in the "Hidden" drawer, so the one shown is named with its class line.
+    expect(within(group('Barbarian 3')).getAllByRole('article', { name: /^Rage( \(|$)/ })).toHaveLength(1);
+    expect(within(row('Barbarian 3', 'Rage (Barbarian, level 1)')).getByText('In play')).toBeInTheDocument();
   });
 
   it('has nothing to use or spend, and no turn button', async () => {
