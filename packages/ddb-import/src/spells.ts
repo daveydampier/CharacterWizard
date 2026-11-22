@@ -1,6 +1,7 @@
 import type { DamagePart, SpellEntry } from '@cw/model';
 import {
-  abilityFromStatId, arr, limitedUseFrom, num, obj, str, timingFromActivation, type Raw,
+  abilityFromStatId, arr, componentRef, limitedUseFrom, num, obj, str, timingFromActivation,
+  type Linked, type Raw,
 } from './raw';
 import { activeItemIds } from './modifiers';
 
@@ -78,7 +79,11 @@ function itemNames(d: Raw): Map<number, string> {
   return names;
 }
 
-export function convertSpells(d: Raw, characterLevel: number): SpellEntry[] {
+/**
+ * Every spell on the sheet, each with the component the sheet says grants it. A spell from an item
+ * has none: an item is not a feature.
+ */
+export function linkedSpells(d: Raw, characterLevel: number): Linked<SpellEntry>[] {
   const active = activeItemIds(d);
   const names = itemNames(d);
   const wrappers: { wrapper: Raw; fromItem: boolean }[] = [
@@ -87,7 +92,7 @@ export function convertSpells(d: Raw, characterLevel: number): SpellEntry[] {
       arr(list).map((w) => ({ wrapper: obj(w), fromItem: group === 'item' }))),
   ];
   const seen = new Set<string>();
-  const out: SpellEntry[] = [];
+  const out: Linked<SpellEntry>[] = [];
   for (const { wrapper, fromItem } of wrappers) {
     const item = fromItem ? grantingItem(wrapper, active, names) : null;
     // A spell from an item that is not equipped (and attuned, if attunable) is not available.
@@ -95,7 +100,7 @@ export function convertSpells(d: Raw, characterLevel: number): SpellEntry[] {
     const entry = spellEntry(wrapper, characterLevel, item);
     if (!entry || seen.has(entry.key)) continue;
     seen.add(entry.key);
-    out.push(entry);
+    out.push({ entry, component: fromItem ? null : componentRef(wrapper.componentTypeId, wrapper.componentId) });
   }
   return out;
 }

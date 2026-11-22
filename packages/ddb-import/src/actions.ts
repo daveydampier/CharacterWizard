@@ -1,7 +1,8 @@
 import type { ActionDice, ActionEntry } from '@cw/model';
 import { numberDuplicates, textHash } from './keys';
 import {
-  abilityFromStatId, arr, limitedUseFrom, num, obj, str, timingFromActivation, type Raw,
+  abilityFromStatId, arr, componentRef, limitedUseFrom, num, obj, str, timingFromActivation,
+  type Linked, type Raw,
 } from './raw';
 
 const SOURCES = ['class', 'race', 'feat', 'item', 'background'] as const;
@@ -60,14 +61,24 @@ function fromCustom(a: Raw, key: string | number): ActionEntry {
   };
 }
 
-export function convertActions(d: Raw): ActionEntry[] {
+/** Every action on the sheet, each with the component the sheet says grants it. */
+export function linkedActions(d: Raw): Linked<ActionEntry>[] {
   const groups = obj(d.actions);
-  const out: ActionEntry[] = [];
+  const entries: ActionEntry[] = [];
+  const components: (string | null)[] = [];
   for (const [group, items] of Object.entries(groups)) {
     const source = (SOURCES as readonly string[]).includes(group) ? (group as GroupSource) : 'class';
-    for (const a of arr(items)) out.push(fromGroup(obj(a), source, keyId(obj(a))));
+    for (const item of arr(items)) {
+      const a = obj(item);
+      entries.push(fromGroup(a, source, keyId(a)));
+      components.push(componentRef(a.componentTypeId, a.componentId));
+    }
   }
-  for (const a of arr(d.customActions)) out.push(fromCustom(obj(a), keyId(obj(a))));
+  for (const item of arr(d.customActions)) {
+    const a = obj(item);
+    entries.push(fromCustom(a, keyId(a)));
+    components.push(null);
+  }
   // Two actions can share an id and a granting component; both are kept.
-  return numberDuplicates(out);
+  return numberDuplicates(entries).map((entry, index) => ({ entry, component: components[index] }));
 }
