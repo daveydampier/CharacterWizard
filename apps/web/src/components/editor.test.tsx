@@ -288,6 +288,44 @@ describe('AbilityEditor', () => {
     expect(group('Out of combat abilities')).toContain('Hex');
   });
 
+  it('lists an ability in Explore when it is given a tag that belongs there, without a tap on the box', async () => {
+    const { show } = await open('vlad');
+    const dialog = await edit('Hex');
+    const explore = within(dialog).getByRole('checkbox', { name: 'Explore' });
+    expect(explore).not.toBeChecked();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Utility' }));
+    expect(explore).toBeChecked();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Utility' }));
+    expect(explore).not.toBeChecked();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Utility' }));
+    await save();
+    // Only the tags are recorded: where it is listed still follows the app's rule.
+    expect(edits()).toEqual({ [ability('Hex').key]: { tags: ['damage', 'debuff', 'utility'] } });
+    show('explore');
+    expect(await screen.findByRole('region', { name: 'Out of combat abilities' })).toBeInTheDocument();
+    expect(group('Out of combat abilities')).toContain('Hex');
+  });
+
+  it('leaves a box where the player put it when the tags change afterwards', async () => {
+    await open('vlad');
+    const dialog = await edit('Hex');
+    const explore = within(dialog).getByRole('checkbox', { name: 'Explore' });
+    await userEvent.click(explore);
+    await userEvent.click(explore);
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Utility' }));
+    expect(explore).not.toBeChecked();
+    await save();
+    expect(edits()).toEqual({ [ability('Hex').key]: { tags: ['damage', 'debuff', 'utility'], inExplore: false } });
+  });
+
+  it('keeps a box set in an earlier edit where it was put', async () => {
+    await open('vlad');
+    useStore.getState().setEdit(ability('Hex').key, { inExplore: false });
+    const dialog = await edit('Hex');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Utility' }));
+    expect(within(dialog).getByRole('checkbox', { name: 'Explore' })).not.toBeChecked();
+  });
+
   it('takes an ability out of Combat when Combat is unticked, and edits from Explore too', async () => {
     const { show } = await open('vlad', 'explore');
     const dialog = await edit('Charm Person');

@@ -36,13 +36,14 @@ interface Props {
 
 /**
  * A view while it is being arranged: the same rows under the same headings, each with a handle
- * instead of a Use button. Rows are put in order, edited, hidden and restored here.
+ * instead of a Use button. Rows are put in order, edited, hidden and restored here, and abilities
+ * of the player's own are added.
  */
 export function EditList({ view, sheet, onDone }: Props) {
   const edits = useStore((s) => s.edits);
   const setEdit = useStore((s) => s.setEdit);
   const setOrder = useStore((s) => s.setOrder);
-  const { edit, editor } = useAbilityEdit();
+  const { edit, add, editor } = useAbilityEdit();
 
   const sections = useMemo(() => {
     const groups = combatGroups(sheet);
@@ -80,9 +81,14 @@ export function EditList({ view, sheet, onDone }: Props) {
 
       <HiddenDrawer hidden={sheet.hidden} onRestore={restore} />
 
-      <button type="button" onClick={onDone} className="mt-4 min-h-11 w-full rounded-lg bg-slate-900 px-4 py-2 font-medium text-white">
-        Done
-      </button>
+      <div className="mt-4 flex gap-2">
+        <button type="button" onClick={add} className="min-h-11 flex-1 rounded-lg border border-slate-400 px-3 py-2 font-medium">
+          Add an ability
+        </button>
+        <button type="button" onClick={onDone} className="min-h-11 flex-1 rounded-lg bg-slate-900 px-4 py-2 font-medium text-white">
+          Done
+        </button>
+      </div>
 
       {editor}
     </div>
