@@ -187,6 +187,58 @@ describe('features from a sheet no fixture has', () => {
     expect(background({ featureName: null })).toEqual([]);
   });
 
+  describe('a custom background', () => {
+    const custom = (featuresBackground: unknown, name: unknown = 'My Wanderer', extra: Record<string, unknown> = {}) => ({
+      background: { hasCustomBackground: true, definition: null, customBackground: { id: 11, entityTypeId: 8, name, featuresBackground }, ...extra },
+    });
+    const standard = (over: Record<string, unknown> = {}) => ({
+      id: 7, entityTypeId: 3, name: 'Sailor', featureName: 'Ship\'s Passage', featureDescription: '<p>Made-up text.</p>', ...over,
+    });
+
+    it('lists the feature of the background it is taken from, under the custom name', () => {
+      expect(convertFeatures(custom(standard()), noLinks)).toEqual([{
+        key: 'feature:3:7', name: 'Ship\'s Passage', origin: 'background', originName: 'My Wanderer', classIndex: null, level: null,
+        parentKey: null, description: '<p>Made-up text.</p>', playKeys: [], hiddenOnSheet: false,
+      }]);
+    });
+
+    it('uses the features background\'s name when the custom background has none', () => {
+      for (const name of [null, '']) {
+        expect(convertFeatures(custom(standard(), name), noLinks).map((f) => f.originName)).toEqual(['Sailor']);
+      }
+    });
+
+    it('keys the feature by what it is when the features background has no IDs', () => {
+      const [feature] = convertFeatures(custom(standard({ id: null, entityTypeId: null })), noLinks);
+      expect(feature.key).toMatch(/^feature:anon-[0-9a-f]{8}$/);
+    });
+
+    it('leaves out a feature that is a feat or comes with feats', () => {
+      expect(convertFeatures(custom(standard({ grantedFeats: [{ name: 'Tough' }] })), noLinks)).toEqual([]);
+      expect(convertFeatures(custom(standard({ featureIsFeat: true })), noLinks)).toEqual([]);
+    });
+
+    it('finds nothing where the custom background has no features background', () => {
+      expect(convertFeatures(custom(null), noLinks)).toEqual([]);
+      expect(convertFeatures(custom(undefined), noLinks)).toEqual([]);
+      expect(convertFeatures({ background: { definition: null, customBackground: { id: null, entityTypeId: null, name: null, featuresBackground: null } } }, noLinks)).toEqual([]);
+      expect(convertFeatures({ background: { definition: null, customBackground: 'x' } }, noLinks)).toEqual([]);
+    });
+
+    it('prefers the standard background\'s feature when there is one', () => {
+      const d = { background: { definition: standard(), customBackground: { id: 1, entityTypeId: 2, name: null, featuresBackground: null } } };
+      expect(convertFeatures(d, noLinks).map((f) => [f.key, f.originName])).toEqual([['feature:3:7', 'Sailor']]);
+    });
+
+    it('names an orphan background option by the custom background', () => {
+      const option = { componentTypeId: 99, componentId: 99, definition: { id: 4, entityTypeId: 2, name: 'D' } };
+      const named = convertFeatures({ ...custom(null), options: { background: [option] } }, noLinks);
+      expect(named.map((f) => [f.name, f.origin, f.originName])).toEqual([['D', 'background', 'My Wanderer']]);
+      const unnamed = convertFeatures({ ...custom(standard(), null), options: { background: [option] } }, noLinks);
+      expect(unnamed.filter((f) => f.name === 'D').map((f) => f.originName)).toEqual(['Sailor']);
+    });
+  });
+
   it('places an option with no listed parent by the list it is in', () => {
     const option = (id: number, name: string) => ({ componentTypeId: 99, componentId: 99, definition: { id, entityTypeId: 2, name } });
     const features = convertFeatures(sheet({

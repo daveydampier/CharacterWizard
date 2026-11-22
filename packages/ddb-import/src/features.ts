@@ -76,11 +76,26 @@ function classDrafts(c: Raw, classIndex: number): Draft[] {
     });
 }
 
+/**
+ * The object that holds the character's background feature, and what the background is called.
+ * A standard background is the sheet's `definition`. A custom one has none: its feature is taken
+ * from the standard background named in `customBackground.featuresBackground`, and the player's
+ * own name for it is `customBackground.name`.
+ */
+function backgroundSource(d: Raw): { holder: Raw; name: string } {
+  const bg = obj(d.background);
+  const standard = obj(bg.definition);
+  const custom = obj(bg.customBackground);
+  const features = obj(custom.featuresBackground);
+  const holder = str(standard.featureName) !== '' ? standard : features;
+  return { holder, name: str(standard.name) || str(custom.name) || str(features.name) };
+}
+
 /** The background's own feature. A feat that a background grants is on the sheet's list of feats. */
 function backgroundDraft(d: Raw): Draft | null {
-  const bg = obj(obj(d.background).definition);
+  const { holder: bg, name } = backgroundSource(d);
   if (bg.featureIsFeat === true || arr(bg.grantedFeats).length > 0) return null;
-  const place: Place = { origin: 'background', originName: str(bg.name), classIndex: null, level: null };
+  const place: Place = { origin: 'background', originName: name, classIndex: null, level: null };
   // The feature has no ID of its own; the background's is used.
   return draft({ name: bg.featureName, id: bg.id, entityTypeId: bg.entityTypeId }, place, str(bg.featureDescription), null, false);
 }
@@ -93,7 +108,7 @@ function optionPlace(group: string, d: Raw): Place {
   }
   if (group === 'race') return { origin: 'species', originName: speciesName(d), classIndex: null, level: null };
   if (group === 'background') {
-    return { origin: 'background', originName: str(obj(obj(d.background).definition).name), classIndex: null, level: null };
+    return { origin: 'background', originName: backgroundSource(d).name, classIndex: null, level: null };
   }
   return { origin: 'feat', originName: '', classIndex: null, level: null };
 }
