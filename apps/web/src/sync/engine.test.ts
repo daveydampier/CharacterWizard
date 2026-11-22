@@ -284,6 +284,60 @@ describe('fetching', () => {
   });
 });
 
+describe('a character that arrives after its items', () => {
+  it('fetches the items from the beginning when the character arrives a round later', async () => {
+    const server = table();
+    const ann = device(server, ANN);
+    await ann.storage.putCharacter(character('c1'));
+    await ann.storage.putItem(item('c1', 'play', 'state'));
+    await syncOnce(ann);
+    const inner = server.remote({ userId: DEE });
+    let cutShort = true;
+    const dm = {
+      storage: memoryStorage(),
+      remote: { ...inner, pullCharacters: async (after: number) => (cutShort ? [] : inner.pullCharacters(after)) },
+    };
+    // The first fetch is cut short before any character arrives. The items are fetched and left out.
+    expect(await pull(dm)).toEqual(new Set());
+    cutShort = false;
+    expect(await pull(dm)).toEqual(new Set(['c1']));
+    expect((await dm.storage.listItems('c1')).map((i) => [i.kind, i.dirty])).toEqual([['play', false]]);
+  });
+
+  it('fetches the items again when a character deleted on this device comes back', async () => {
+    const server = table();
+    const phone = device(server, ANN);
+    const tablet = device(server, ANN);
+    await phone.storage.putCharacter(character('c1'));
+    await phone.storage.putItem(item('c1', 'edit', 'spell:1'));
+    await syncOnce(phone);
+    await syncOnce(tablet);
+    // Deleted on the tablet and not yet sent: its items are gone from the tablet.
+    await tablet.storage.removeCharacter('c1');
+    await tablet.storage.putCharacter(character('c1', { deleted: true, rawJson: null, updatedAt: T2 }));
+    // Re-imported on the phone later than that.
+    await phone.storage.putCharacter(character('c1', { updatedAt: T3, importedAt: T3 }));
+    await syncOnce(phone);
+    await syncOnce(tablet);
+    expect((await tablet.storage.listCharacters())[0]).toMatchObject({ id: 'c1', deleted: false });
+    expect((await tablet.storage.listItems('c1')).map((i) => i.key)).toEqual(['spell:1']);
+  });
+
+  it('reports no change to a character it already holds when the items are fetched again', async () => {
+    const server = table();
+    const ann = device(server, ANN);
+    const dm = device(server, DEE);
+    await ann.storage.putCharacter(character('c1'));
+    await ann.storage.putItem(item('c1', 'play', 'state'));
+    await syncOnce(ann);
+    await syncOnce(dm);
+    await ann.storage.putCharacter(character('c2', { ddbId: '43' }));
+    await syncOnce(ann);
+    expect(await pull(dm)).toEqual(new Set(['c2']));
+    expect((await dm.storage.listItems('c1'))[0]).toMatchObject({ data: { value: 1 }, dirty: false });
+  });
+});
+
 describe('a change made while a sync is writing', () => {
   it('keeps a change to an item made just before the fetched copy would have replaced it', async () => {
     const server = table();

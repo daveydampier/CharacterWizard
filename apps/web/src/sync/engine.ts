@@ -90,6 +90,13 @@ export async function pull({ storage, remote }: SyncDeps): Promise<Set<string>> 
   const changed = new Set<string>();
 
   const characters = await remote.pullCharacters(await cursor(storage, CURSOR_CHARACTERS));
+  if (characters.length > 0) {
+    // A character that becomes live on this device needs every item it has, and the item cursor
+    // may already be past them. The cursor goes back before anything is stored, so that a round
+    // cut short after this point still fetches the items from the beginning.
+    const held = new Set((await storage.listCharacters()).filter((c) => !c.deleted).map((c) => c.id));
+    if (characters.some((row) => !row.deleted && !held.has(row.id))) await storage.setMeta(CURSOR_ITEMS, 0);
+  }
   for (const row of characters) {
     const found = { revived: false };
     // Looked at and written in one step, so a change made on this device in between is not lost.
@@ -127,6 +134,8 @@ export async function pull({ storage, remote }: SyncDeps): Promise<Set<string>> 
         changed.add(row.characterId);
         return 'remove';
       }
+      // Already held as fetched: a fetch that starts again from the beginning rewrites nothing.
+      if (mine && !mine.dirty && mine.updatedAt === row.updatedAt) return 'keep';
       if (!mine || mine.updatedAt !== row.updatedAt) changed.add(row.characterId);
       const { rev: _rev, ...rest } = row satisfies RemoteItem;
       return { put: { ...rest, dirty: false } };
