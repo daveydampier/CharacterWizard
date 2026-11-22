@@ -4,11 +4,12 @@ import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import type { Roll } from '@cw/model';
 import { applyEdits, type Sheet } from '@cw/rules';
-import type { Slug } from '../../../../test-utils/fixtures';
+import { loadRaw, type Slug } from '../../../../test-utils/fixtures';
 import type { View } from '../router';
 import { CharacterScreen } from '../screens/Character';
+import { memoryStorage } from '../storage';
 import { useStore } from '../store';
-import { ability, seed } from '../test/helpers';
+import { ability, seed, testRemote } from '../test/helpers';
 import { RollEditor } from './RollEditor';
 
 describe('RollEditor', () => {
@@ -555,6 +556,78 @@ describe('AbilityEditor', () => {
       await save();
       expect(screen.queryByRole('dialog')).toBeNull();
       expect(edits()[ability('Hex').key].roll).toMatchObject({ kind: 'damage', damage: [{ dice: '1d8' }] });
+    });
+  });
+
+  describe('two abilities that spend one pool', () => {
+    /** Maya with a second spell cast from the same item's charges. */
+    async function openShared() {
+      const raw = loadRaw('maya');
+      const ray = raw.data.spells.item[0];
+      raw.data.spells.item.push({
+        ...ray, id: ray.id + 1, definition: { ...ray.definition, id: ray.definition.id + 1, name: 'Ember Lance' },
+      });
+      await useStore.getState().init(memoryStorage(), testRemote());
+      const record = await useStore.getState().saveImported(raw);
+      if (!record) throw new Error('the copy did not import');
+      await useStore.getState().open(record.id);
+      render(<CharacterScreen id={record.id} view="combat" />);
+      await screen.findByRole('heading', { name: record.name });
+      const a = ability('Scorching Ray');
+      const b = ability('Ember Lance');
+      if (a.cost.kind !== 'uses' || b.cost.kind !== 'uses' || a.cost.resourceKey !== b.cost.resourceKey) {
+        throw new Error('expected both spells to spend one pool');
+      }
+      return { a: a.key, b: b.key, pool: a.cost.resourceKey };
+    }
+
+    const max = (pool: string) => {
+      const sheet = useStore.getState().sheet;
+      return [...(sheet?.resources ?? []), ...(sheet?.unshownResources ?? [])].find((r) => r.key === pool)?.max;
+    };
+    const importedMax = (pool: string) => useStore.getState().baseSheet?.resources.find((r) => r.key === pool)?.max;
+
+    /** Opens a row unless it is open already, and taps its Edit button. */
+    async function reopen(label: string) {
+      const toggle = within(row(label)).getAllByRole('button')[0];
+      if (toggle.getAttribute('aria-expanded') === 'false') await userEvent.click(toggle);
+      await userEvent.click(within(row(label)).getByRole('button', { name: `Edit ${label}` }));
+      return screen.getByRole('dialog', { name: `Edit ${label}` });
+    }
+
+    async function setMax(label: string, value: string) {
+      const dialog = await reopen(label);
+      const field = within(dialog).getByLabelText('Maximum uses');
+      await userEvent.clear(field);
+      await userEvent.type(field, value);
+      await save();
+    }
+
+    it('records nothing about the uses of one when only its tags change, and Back to imported on the other restores the pool', async () => {
+      const { a, b, pool } = await openShared();
+      const imported = importedMax(pool);
+      await setMax('Ember Lance', '5');
+      expect(max(pool)).toBe(5);
+
+      const dialog = await reopen('Scorching Ray');
+      expect(within(dialog).getByLabelText('Maximum uses')).toHaveValue(5);
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Control' }));
+      await save();
+      expect(Object.keys(edits()[a])).toEqual(['tags']);
+
+      await reopen('Ember Lance');
+      await userEvent.click(screen.getByRole('button', { name: 'Back to imported' }));
+      expect(edits()[b]).toBeUndefined();
+      expect(max(pool)).toBe(imported);
+    });
+
+    it('keeps the pool maximum under the one it was last set through', async () => {
+      const { a, b, pool } = await openShared();
+      await setMax('Ember Lance', '5');
+      await setMax('Scorching Ray', '4');
+      expect(edits()[a]).toEqual({ uses: { max: 4, reset: expect.any(String) } });
+      expect(edits()[b]).toBeUndefined();
+      expect(max(pool)).toBe(4);
     });
   });
 

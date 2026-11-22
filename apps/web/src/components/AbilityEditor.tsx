@@ -1,5 +1,5 @@
 import type { Ability, ResetType, Tag, UsesEdit } from '@cw/model';
-import { canEditUses, defaultViews, diffEdit, editForm, isFeatureKey, type EditForm } from '@cw/rules';
+import { canEditUses, defaultViews, diffEdit, editForm, isFeatureKey, type EditForm, type Sheet } from '@cw/rules';
 import { useState, type FormEvent } from 'react';
 import { useStore } from '../store';
 import { Dialog } from './Dialog';
@@ -18,6 +18,20 @@ interface Draft extends Omit<EditForm, 'uses'> {
 }
 
 const sameTags = (a: Tag[], b: Tag[]): boolean => a.length === b.length && a.every((t) => b.includes(t));
+
+/** Every row on `sheet`, listed or hidden, abilities and features alike. */
+const rowsOf = (sheet: Sheet): Ability[] =>
+  [...sheet.abilities, ...sheet.universal, ...sheet.hidden, ...Object.values(sheet.featureRows)];
+
+/** The pool the ability with this key spends on `sheet`; null when it spends none. */
+function poolOf(sheet: Sheet, key: string): string | null {
+  const row = rowsOf(sheet).find((a) => a.key === key);
+  return row?.cost.kind === 'uses' ? row.cost.resourceKey : null;
+}
+
+/** The keys of the abilities that spend `pool` on `sheet`. */
+const spendersOf = (sheet: Sheet, pool: string): string[] =>
+  [...new Set(rowsOf(sheet).filter((a) => a.cost.kind === 'uses' && a.cost.resourceKey === pool).map((a) => a.key))];
 
 /**
  * Changes one ability from the sheet: when it is used, what it costs, how it is tagged, where it
@@ -90,7 +104,27 @@ export function AbilityEditor({ ability, onClose }: { ability: Ability; onClose:
       inExplore: view('explore', draft.inExplore, start.inExplore, now.inExplore),
       hidden: draft.hidden !== start.hidden ? draft.hidden : now.hidden,
     };
-    setEdit(ability.key, diffEdit(baseSheet, base, form));
+    const { uses: diffedUses, ...diffed } = diffEdit(baseSheet, base, form);
+    const current = useStore.getState().edits.abilities;
+    /**
+     * Uses the player did not touch stay as this ability's own edit had them. What the pool reads
+     * now may come from another ability's edit on the same pool, which is not this one's to record.
+     */
+    const kept = usesChanged ? diffedUses : current[ability.key]?.uses;
+    setEdit(ability.key, kept === undefined ? diffed : { ...diffed, uses: kept });
+    // A new maximum for a pool that other abilities also spend is the one that counts: only this edit holds it.
+    const after = useStore.getState().sheet;
+    if (usesEditable && usesChanged && draftUses !== null && after) {
+      const pool = poolOf(after, ability.key);
+      if (pool !== null) {
+        for (const other of spendersOf(after, pool)) {
+          const stored = current[other];
+          if (other === ability.key || !stored || stored.uses === undefined || stored.uses === 'none') continue;
+          const { uses: _dropped, ...rest } = stored;
+          setEdit(other, rest);
+        }
+      }
+    }
     onClose();
   }
 
