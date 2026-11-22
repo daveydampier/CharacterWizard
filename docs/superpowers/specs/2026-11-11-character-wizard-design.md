@@ -1,7 +1,7 @@
 # Character Wizard: design
 
 Date: 2026-11-11
-Status: approved in conversation, awaiting written review. Milestone 2 decisions added 2026-11-11 (sections 4, 5, 6, 8, 10, 12, 15 and 17). Milestone 3 decisions added 2026-11-18 (sections 2, 4, 5, 6, 7, 10, 11, 12, 13, 14, 15, 16 and 17). Details settled by the Part A reviews added 2026-11-19 (sections 5.2, 5.3, 10.5, 11 and 12). The Features page added 2026-11-21 (sections 2, 4, 5, 10, 13, 14, 15, 16 and 17), approved in conversation and awaiting written review. Details settled while Part B's plan was revised added 2026-11-22 (sections 5.3, 5.4, 5.5, 10.4 and 12), awaiting review.
+Status: approved in conversation, awaiting written review. Milestone 2 decisions added 2026-11-11 (sections 4, 5, 6, 8, 10, 12, 15 and 17). Milestone 3 decisions added 2026-11-18 (sections 2, 4, 5, 6, 7, 10, 11, 12, 13, 14, 15, 16 and 17). Details settled by the Part A reviews added 2026-11-19 (sections 5.2, 5.3, 10.5, 11 and 12). The Features page added 2026-11-21 (sections 2, 4, 5, 10, 13, 14, 15, 16 and 17), approved in conversation and awaiting written review. Details settled while Part B's plan was revised added 2026-11-22 (sections 5.3, 5.4, 5.5, 10.4 and 12), awaiting review. Details settled by the Part B reviews added 2026-11-22 (sections 5.4, 8, 10.1, 10.3, 10.4 and 10.6), awaiting review.
 
 ## 1. Purpose
 
@@ -284,11 +284,11 @@ interface CharacterEdits {
 `applyEdits(sheet, edits)` in `packages/rules` is a pure function that returns the sheet the views show. The views, the turn engine and the store's play logic read only that sheet and know nothing of edits. It applies to imported abilities, universal actions and custom abilities alike, by key.
 
 - **Timing, tags, roll:** replace the imported value. Edited tags set `tagSource` to `user`.
-- **Uses:** `{ max, reset }` changes the pool the ability already spends from, or gives an ability with no cost a pool under its own key and makes Use spend from it. `'none'` removes the cost. Not offered for an ability that costs a spell slot.
+- **Uses:** `{ max, reset }` changes the pool the ability already spends from, or gives an ability with no cost a pool under its own key and makes Use spend from it. `'none'` removes the cost. Not offered for an ability that costs a spell slot, nor for one that carries its item's charges (a weapon with a charge pool): a pool under that ability's key would be the item's own. Where several abilities spend one pool, one edit holds its maximum: setting it through one ability removes it from the others' edits. What is spent from a pool is kept while the pool is not shown, and a rest restores it like any other.
 - **inCombat, inExplore:** override which views list the ability. Unset, Combat lists every timing except `long`, and Explore lists what section 10.2 says. An ability forced into Combat whose timing has no group there is listed under "Other". A feature follows a different rule when unset (section 5.5).
 - **hidden:** the ability leaves both views and is listed in `sheet.hidden`. A pool is not shown as a resource chip when at least one ability uses it and none of them is listed: all are hidden, or are features in neither view (section 5.5). The editor still reads such a pool, so the uses are there when the ability is edited again.
 - **order:** within any group, abilities whose key is in the view's list come first, in list order; the rest follow in sheet order.
-- **Custom abilities** are converted to `Ability` records with source `custom` and appended. Editing one rewrites its `custom` item; hiding it or changing its views uses an `AbilityEdit` under its key, like any other ability. Its description is plain text and is escaped before display.
+- **Custom abilities** are converted to `Ability` records with source `custom` and appended. Editing one rewrites its `custom` item; hiding it or changing its views uses an `AbilityEdit` under its key, like any other ability. Its description is plain text and is escaped before display. A stored custom ability whose key does not start `own:` is ignored.
 - The sheet records which keys carry an edit, so a row can show "edited".
 
 An edit whose ability is not on the sheet (an unequipped weapon, a feature lost on re-import) is kept and has no effect.
@@ -409,7 +409,7 @@ Not calculated: effects that exist only in description text, hit points, conditi
 
 **Rests:** Short Rest restores short-rest resources and Pact Magic slots. Long Rest restores everything and clears concentration. Item charges that reset at dawn are restored on a Long Rest. Consumables never reset. A pool whose reset type the import did not recognise is left alone; the player restores it by hand. Both rests also reset the turn.
 
-**Undo:** one step. It reverses the last Use, Start my turn or rest. A manual change (a pill, a pip, ending concentration) clears the undo step, so undo only ever reverses the most recent change.
+**Undo:** one step. It reverses the last Use, Start my turn or rest. A manual change (a pill, a pip, ending concentration) clears the undo step, so undo only ever reverses the most recent change. A change to the edits also clears it when the state it would put back no longer fits the sheet (more spent than an edited maximum allows, or concentration on an ability since hidden).
 
 **Manual control:** the player can flip any of the three turn pills and can spend or restore one use of any pool by tapping its pips. This is how the player handles anything the app cannot model: Action Surge granting a second Action, a homebrew feature described only in text, or a mistake.
 
@@ -475,7 +475,7 @@ Every view is phone first. Each is one scrolling page.
 - Abilities grouped by Action, Bonus Action, Reaction, "No action needed" (timing `free`, for example Action Surge; collapsed) and "Other" (timing `unknown`; shown only when not empty). Abilities that take a minute or more are not listed. Each row has the name, a cost label, tags, a plain-English roll line and a Use button. An edited row also carries the label "edited".
 - From Part B, an "Always on" group (timing `passive`; collapsed; shown only when not empty), so that reminders do not sit among the abilities of "No action needed". Also from Part B, a row whose timing is `passive` and that costs nothing has no Use button. Until Part B, `passive` shares the "No action needed" group.
 - A group whose timing is spent dims but stays visible.
-- Two rows with the same name are told apart by their cost label ("free cast, 3 left" and "pact slot"). Where two rows on a sheet share a name, the kind of cost ("free cast", "pact slot") is also part of each row's accessible name and of its buttons', so a screen reader can tell them apart.
+- Two rows with the same name are told apart by their cost label ("free cast, 3 left" and "pact slot"). Where two rows on a sheet share a name, the kind of cost ("free cast", "pact slot") is also part of each row's accessible name and of its buttons', so a screen reader can tell them apart. A hidden row counts as a twin too, so hiding one of two does not rename the other, and the "Hidden" drawer names each by that fuller name. The editor's title uses it as well.
 - A weapon with a charge pool shows the pool as pips on its row.
 - The Action group states the number of attacks when it is more than one. Using any weapon spends the Action once; attacks within the Action are not counted.
 - A collapsed "Anyone can do this" group for the universal actions. They use the normal row, so Use on Dash spends the Action.
@@ -510,7 +510,7 @@ Every view is phone first. Each is one scrolling page.
 ### 10.3 Shared behaviour
 
 - Tapping a row opens the full description. Descriptions are HTML from the import and are sanitised to a small set of formatting tags before display.
-- Dialogs (the slot choice and the editors) are `<dialog>` elements: focus moves into them, stays inside them, and Escape closes them. A yes-or-no question (delete, sign out with unsynced changes) uses the browser's own confirm box.
+- Dialogs (the slot choice and the editors) are `<dialog>` elements: focus moves into them, stays inside them, and Escape closes them. When one closes, focus goes back to the control that opened it. A yes-or-no question (delete, sign out with unsynced changes) uses the browser's own confirm box.
 
 ### 10.4 Editing and arranging (milestone 3)
 
@@ -521,10 +521,11 @@ Playing and arranging are separate, so that nobody moves or edits a row by accid
 **The editor** is a dialog with:
 
 - Timing: Action, Bonus Action, Reaction, No action needed, Takes a minute or more, Passive.
-- Limited uses: off, or a maximum and a reset (Short Rest, Long Rest, never). Not shown for an ability that costs a spell slot.
+- Limited uses: off, or a maximum and a reset (Short Rest, Long Rest, never). Not shown for an ability that costs a spell slot or that carries its item's charges; the editor says which.
 - Tags: the nine tags as toggles.
 - Shown in: Combat and Explore tick boxes, starting from where the app put the ability. A box the player has not set keeps following the app's rule as they change the timing and tags, so giving an ability the Utility tag ticks Explore by itself.
-- Roll: none, an attack (bonus and damage), a save (ability, DC and damage), damage only, or dice only. Numbers are typed in.
+- Roll: none, an attack (bonus and damage), a save (ability, DC and damage), damage only, or dice only. Numbers are typed in. A bonus outside -20 to 40, a DC outside 1 to 40, a fraction, or a damage type with no dice is refused with a message, not changed.
+- Save records only what the player changed in that sitting. A field they did not touch keeps following the imported sheet, even if a sync changed the ability while the editor was open.
 - Hide, and "Back to imported", which removes every edit to that ability.
 
 **"Edit list"** is a button at the bottom of each view. It switches the view into arranging:
@@ -533,7 +534,7 @@ Playing and arranging are separate, so that nobody moves or edits a row by accid
 - Dragging moves a row within its own group. Moving an ability to another group is done by changing its timing in the editor.
 - Combat and Explore each keep their own order. The first drag in a group fixes that group's order as shown; an ability that arrives later goes to the end of its group.
 - A "Hidden" drawer lists hidden abilities, each with Restore.
-- "Add an ability" opens the editor with three more fields: a name, a plain-text description, and a concentration tick box. Its cost is nothing, limited uses, or a spell slot of a chosen level. A custom ability can also be deleted from its editor.
+- "Add an ability" opens the editor with three more fields: a name, a plain-text description, and a concentration tick box. Its cost is nothing, limited uses, or a spell slot of a chosen level. Its "Shown in" starts with the view it was added from ticked, so the new row appears where the player is. A custom ability can also be deleted from its editor.
 - "Done" returns to playing.
 
 Hide, order and edit work on any row, including the universal actions. The universal actions' own text does not refer to where other rows are.
@@ -562,6 +563,7 @@ The third choice in the header switch. It answers "what does my character have?"
 - It lists every feature of section 5.5 that the sheet does not itself hide, in that section's groups and order. Each group has a heading: the class's name and level, "Feats", the species' name, the background's name. A group with nothing in it is not shown.
 - A row has the feature's name. A class or subclass feature also says where it comes from and at what level ("Warlock, level 2"; a subclass feature names the subclass). An option is indented under the feature that offers it, in a group named after that feature, so that a screen reader says what it belongs to.
 - A feature that has rows in play carries the label "In play".
+- Where two features share a name, the names of their controls, of their option groups and of their rows in the "Hidden" drawer add what tells them apart: the parent for an option, the class and level for a class feature, otherwise the group's heading. If they are still the same, the later ones in sheet order get a number. The visible text of a row stays the plain name.
 - Tapping a row opens its description, as section 10.3 describes. A feature with no description says so.
 - There is no turn tracker, no resource chips and no Use button: nothing on this page is spent.
 - A sheet with no features shows one line saying so.

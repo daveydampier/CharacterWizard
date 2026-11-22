@@ -10045,3 +10045,15 @@ The spec was changed to match where it said something else or said nothing. Each
 - Dragging in "Edit list" is tested from the keyboard and through the "Move up" and "Move down" buttons. A pointer or touch drag is checked by hand in the walk-through, and has not been tried on a real touch screen.
 - A re-import still takes its time stamp from the copy in memory, and deleting a character is still two storage steps. Task 1 moved the sync engine, play state and edits to the one-step write, and left these.
 - What the reviews of this plan's code find and leave goes in `docs/superpowers/plans/2026-11-18-milestone-3-deferred-findings.md`, under "Part B: editing and arranging".
+
+## After the reviews
+
+The plan was executed on 2026-11-22, on the branch `milestone-3-overlays`, cut from the commit that added this plan. Tasks 1 to 13 were each put in place from this document and compared with the tested build they were generated from: every one was identical. Each was then reviewed by itself, and the finished branch was reviewed as a whole.
+
+- The task reviews found eleven faults in this plan's code. One round of nine commits fixed them, each with tests that fail without the fix, and a re-review confirmed each.
+- The whole-branch review found no path in ordinary use that loses a player's work, and asked for nine more changes. One wave of eight commits made them, and a re-review confirmed each.
+- The suite went from 1254 tests at the end of Task 13 to 1305.
+- Task 14's walk-through held on all 24 points at 375 by 812 against the in-memory account. A row was dragged with a mouse; nothing was tried with a finger.
+- One finding is open for the owner: the copy of a feature that D&D Beyond lists twice is named with a " 2" on its controls.
+
+So the code on the branch is not the code in this document's blocks. What changed, what was found and left, and what is not verified are in `2026-11-18-milestone-3-deferred-findings.md` under "Part B: editing and arranging", and the design document has the rules the reviews settled (sections 5.4, 8, 10.1, 10.3, 10.4 and 10.6).

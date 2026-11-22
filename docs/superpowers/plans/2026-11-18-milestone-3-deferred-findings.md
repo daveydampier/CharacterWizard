@@ -109,22 +109,78 @@ The Features page (plan `2026-11-21-features-page.md`) was reviewed task by task
 
 ## Part B: editing and arranging
 
-Found while Part B's plan (`2026-11-22-milestone-3-part-b-overlays.md`) was being built and checked. Smallest first. None blocks merging.
+Part B (plan `2026-11-22-milestone-3-part-b-overlays.md`) was built task by task, each task reviewed by itself, and the finished branch reviewed once more as a whole.
 
-- A hidden custom ability cannot be deleted until it is restored, because a hidden row offers only Restore.
-- Two hidden rows with the same name have the same "Restore" button name.
-- Saving a custom ability's editor replaces the whole edit stored under its key with where it is shown and whether it is hidden. Any other field there, which only another version of the app could have written, is dropped.
-- When a dialog opens, focus lands on the dialog and not on its first field.
+The task reviews found eleven faults, all fixed with tests that fail without the fix: what was spent was forgotten when a pool stopped being shown, so hiding and restoring was a free refill; Undo could put back more spent uses than an edited maximum allows, or concentration on an ability since hidden; an imported pool above 99 uses blocked saving any change to that ability; a sync that changed an ability while its editor was open pinned the old imported values as edits; a roll number out of range was changed without a word; a dialog did not hand focus back when it closed; two hidden rows, or two features, with one name could not be told apart by their controls; the editor's comparison depended on the order of keys; and the test stand-in for a dialog was too loose to notice any of the focus faults.
+
+The whole-branch review found no path in ordinary use that loses, duplicates or resurrects an edit, an order, a custom ability or what is spent. It asked for nine more changes, all made: "Add an ability" now offers "Shown in" and the new row appears in the view it was added from; one edit holds a shared pool's maximum; a custom ability must have a key of the player's own; nothing is written for a character the device no longer holds; the editor's title tells twins apart; a number in a feature's label stays with that feature; a negative bonus can be typed on a phone; and a weapon with charges is no longer offered "Limited uses", which would have rewritten its item's charges.
+
+One finding from the last re-review is open and waits for the owner's word:
+
+- **A feature the sheet lists twice.** D&D Beyond lists Rage and Innate Sorcery twice and hides one copy. Numbers in feature labels now follow the sheet's order, and the hidden copy comes first, so the copy the player sees is named "Rage (Barbarian, level 1) 2" on its controls and to a screen reader. The row's visible text is still "Rage". The fix is small: when numbering, put the copies the sheet itself hides after the others.
+
+Found and left. None blocks merging. The ones to pick up first are at the top.
+
+Editing:
+
+- A feature that already has rows in play is not offered "Shown in" (decided; spec section 5.5). A feat with several parts, only one of which has an ability, cannot be ticked into a view as a reminder of the rest; the player adds a custom ability for that.
+- The Features page does not show which features the player has ticked into a view. "In play" marks only a feature with abilities of its own.
+- "Back to imported" on a feature that D&D Beyond hides, and that the player had restored, hides it again: for that feature the restoring is itself the edit.
+- A weapon with charges cannot have its charges' maximum corrected in the app. The editor says its charges are on its item.
+- If a sync brings in a "Shown in" choice while the editor is open and the player saves another field, the box goes back to the app's rule and the synced choice is lost.
+- An ability whose uses cannot be edited keeps a stale `uses` edit, written by an older state of the sheet, through every Save. It has no effect, but the row counts as edited.
+- A stored `{ hidden: false }` on an ability that is not a feature counts as an edit though it changes nothing. The app never writes one.
+- Dice text is not checked as dice: "abc" saves as a roll.
+- An editor's error is not tied to its field, and focus does not move to it. It is announced.
+- The line under a feature's "Shown in" is not tied to the boxes for a screen reader.
+- The editor of a feature with rows in play says "Change those rows where they are listed" even when none of them is on the sheet.
+- A hidden custom ability cannot be deleted until it is restored. Its delete question does not say that deleting ends concentration and forgets spent uses.
+- A spell-slot cost can be chosen for a custom ability on a character with no slots. No test covers a custom slot ability on a pact-only character or one with both kinds.
+- No length limit on a custom ability's name and description, nor on the lists the normalisers read.
+- Saving an editor writes the whole edit as this version of the app understands it, so a field a newer version wrote there is dropped.
+
+Arranging:
+
+- After "Move up" or "Move down" reaches an end of the group, or after Hide, focus falls to the page. A move by button is not announced as a drag is.
+- A press inside a dialog that is released on the dimmed area closes the dialog, and loses what was typed.
+- When a dialog opens, focus lands on the dialog's scrolling body, not on its first field (seen in a desktop browser).
 - Deleting a custom ability, deleting a character and signing out with unsynced changes ask with the browser's own confirm box, not with a dialog of the app's.
-- "Start my turn" stays pinned at the bottom of the Combat view while the list is being arranged.
+- A row hidden and later restored comes back first in its group, not where it was.
+- A dragged row can be dragged, on screen, outside its list. It still lands in its group.
+- The touch sensor is never used: on a touch screen the pointer sensor acts first, so a drag starts after 4 px on the handle, not after a short press.
+- A feature's options keep the sheet's order under it and cannot be put in order among themselves. They are a plain group, not a list, to a screen reader.
 - A feature's row in a view comes after every ability in its group until the player arranges that group.
-- Hide on a feature's row in a view's "Edit list" hides the feature everywhere, the Features page included. Unticking "Shown in" is how to take it out of one view. The row can be restored from either "Hidden" drawer.
-- A feature's options keep the sheet's order under it. They can be edited and hidden, and cannot be put in order among themselves.
-- Only four pools are shown above the list before "more", so a pool the player has just given a feature or an ability can be behind that button.
-- A re-import still takes its time stamp from the copy in memory, and deleting a character is still two storage steps (listed above under Part A). Only the sync engine, play state and edits were moved to the one-step write.
-- The JavaScript bundle is over 600 kB before compression, mostly supabase-js and dnd-kit. Milestone 5 (offline and install) is the place to split it.
+- Hide on a feature's row in a view hides the feature everywhere, the Features page included. Unticking "Shown in" takes it out of one view. It can be restored from either "Hidden" drawer.
+- A copy of a feature that D&D Beyond hides counts as a twin of the one shown, so the shown one carries its class and level in its controls' names.
+- A ticked feature's row that shares a name with an ability gets the same label as it, because a row with no cost has no kind of cost to add.
+- Two rows with one name and the same kind of cost (two slot casts of one spell from two sources) still share a label.
+- "Start my turn" stays pinned at the bottom of the Combat view while the list is being arranged.
+- Only four pools are shown before "more", so a pool the player has just made can be behind that button. A pool's chip stays when its only ability is unticked from both views but is still listed nowhere else.
 
-Decided, and to revisit if it annoys: a feature that already has rows in play is not offered "Shown in". A feat with several parts, only one of which has an ability, cannot be ticked into a view as a reminder of the rest; the player adds a custom ability for that (spec section 5.5).
+Storage and syncing:
+
+- Every write of an item reads the item's whole character, raw sheet included: twice for each tap, once for each fetched item. Nobody has measured it on a phone. Only the fetch needs the record; a tap needs only to know it is still there.
+- The device forgets a deletion once the account has it. An edit removed and made again (hide, restore, hide) is then stamped by this device's clock alone; if that clock is behind the account's by more than the gap between the two changes, the account ignores the new edit and the device shows what the account does not hold.
+- After a tap on a character that another device has just deleted, nothing is written, but the screen shows the change and "Waiting to sync" until the sync round ends and closes the character.
+- If the read-back after a fetch fails, a change the player made to what is spent during that fetch is no longer stamped again first. It still wins unless the other device's clock is ahead.
+- A sync or re-import of the same character in the moment between opening it and its saved state arriving can leave the sheet and the base sheet from different imports.
+- A failed write of an edit leaves the edit on screen until the next read-back drops it. The "not saving" banner is the only sign. Play state behaves the same.
+- Undo is dropped, needlessly, when the spent counts differ only in the order they are held in. The same comparison makes the store rewrite play state it had no need to.
+- The check for "does the device already hold this character" reads the list before the writes, so a character deleted on the device in that instant, with a newer copy fetched, arrives without its items being fetched again. A fetched copy that loses to a newer local deletion still sends the fetch back to the beginning once.
+- Deleting a custom ability leaves its key in the stored orders. Saving one writes its two items in two steps. `setEdit` and `saveCustom` stamp a new time even when nothing changed.
+- A re-import still takes its time stamp from the copy in memory, and deleting a character is still two storage steps (listed above under Part A).
+- An ID that arrives as text containing `@` or `#` could make two features share a key. D&D Beyond's IDs are numbers.
+
+Tests:
+
+- No test syncs a feature's edit, an order or a custom ability between two devices; only an ability's edit. It is the same path.
+- No test of the one-step write on the IndexedDB storage with two calls interleaved, nor that a fetch which starts again rewrites nothing, nor of a failed write of an edit, nor of an edit that clamps what is spent during a fetch.
+- Not pinned by a test: where "Always on" sits among the groups; a passive row with a cost keeping its Use button; an option with no parent named; a feature D&D Beyond hides that is ticked and not restored; a reload re-reading the Features page's order; the second order of two abilities on one pool; non-finite numbers in stored edits.
+- The test "ignores edits until the saved state has loaded" passes without the guard it names.
+
+Size:
+
+- The JavaScript bundle is over 600 kB before compression, mostly supabase-js and dnd-kit. Milestone 5 (offline and install) is the place to split it.
 
 ## Task 13: done
 
@@ -152,7 +208,9 @@ What Task 13's steps got wrong, found with Supabase CLI 3.2.0. The plan and the 
 - Whether a successful fetch from the character service redirects. An unknown ID answers 403 directly; the import function now follows no redirects.
 - An offline start, end to end: sign in, wait more than an hour, turn on aeroplane mode, open the app. It should say the changes are waiting, not "Sign in again to sync", and sync by itself within about two minutes of the connection coming back, while the app is on screen (the auth library waits a minute after a renewal fails, then tries every 30 seconds). Tests cover the app's side; the auth library's side was read in its source, not run. Check it in Task 13.
 - What the screen shows between returning from Discord and the sign-in finishing. From the code, the sign-in screen shows again for a moment.
-- Dragging in "Edit list" on a real touch screen. It was checked with a mouse; the tests cover the keyboard and the up and down buttons.
+- Dragging in "Edit list" on a real touch screen. It was checked with a mouse on the finished branch; the tests cover the keyboard and the up and down buttons.
+- Whether an iPhone's keyboard offers a minus sign in the attack bonus and check bonus fields. The digits-only keypad was removed from those two fields for that reason; nobody has looked on a phone.
+- How long a tap takes to save on a real phone with a real sheet, now that every write of an item reads its character.
 - An edit made on one device appearing on another, on the deployed site. Tests cover it against the in-memory account.
 - One database test ("gives them a profile: named as on Discord, not approved, not an admin") failed once in a full run while Part B's plan was being built, and passed on three reruns and in every later run. Nothing in Part B touches the database. If it fails again, look at how the test waits for the in-process Postgres.
 - A real feature description on the Features page at phone width. The test sheets' descriptions are placeholders, so long text and wide tables were not seen there. The page uses the same description display as every ability row.
