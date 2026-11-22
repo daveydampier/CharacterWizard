@@ -25,9 +25,10 @@ describe('combatGroups', () => {
 
   it.each(SLUGS)('leaves out only the abilities that take a minute or more: %s', (slug) => {
     const sheet = sheetOf(slug);
-    const groups = combatGroups(sheet);
+    const { universal, ...groups } = combatGroups(sheet);
     const shown = Object.values(groups).reduce((n, list) => n + list.length, 0);
     expect(shown).toBe(sheet.abilities.filter((a) => a.timing !== 'long').length);
+    expect(universal).toEqual(sheet.universal);
   });
 });
 

@@ -1,6 +1,6 @@
 import {
   ABILITIES, ABILITY_FULL, SKILLS,
-  type Ability, type AbilityName, type Character, type ProficiencyLevel, type SkillName,
+  type Ability, type AbilityName, type Character, type ProficiencyLevel, type SkillName, type ViewName,
 } from '@cw/model';
 import { buildAbilities, resources, type Resource } from './abilities';
 import { savingThrows, skillLevel, skills } from './checks';
@@ -10,6 +10,14 @@ import { featureGroups, type FeatureGroup } from './features';
 import { conditionalNotes, type Note } from './notes';
 import { spellSlots, spellcasting } from './spellcasting';
 import { universalActions } from './universal';
+
+/** How the player has arranged the views. Empty on a sheet with no edits. */
+export interface SheetLayout {
+  /** Ability keys in the player's order, for each view. Abilities not listed follow in sheet order. */
+  order: Record<ViewName, string[]>;
+  /** By ability key: the player's choice of which views list it. Absent means the app decides. */
+  show: Record<string, { combat?: boolean; explore?: boolean }>;
+}
 
 export interface Sheet {
   name: string;
@@ -35,6 +43,11 @@ export interface Sheet {
   notes: Note[];
   /** The Features page, in order. Kept apart from `abilities`: nothing here is used or spent. */
   features: FeatureGroup[];
+  /** Abilities the player has hidden. They are in neither `abilities` nor `universal`. */
+  hidden: Ability[];
+  /** Keys of the abilities that carry an edit. */
+  edited: string[];
+  layout: SheetLayout;
 }
 
 function saveProficiency(c: Character): Record<AbilityName, boolean> {
@@ -74,5 +87,8 @@ export function buildSheet(c: Character): Sheet {
     universal: universalActions(),
     notes: conditionalNotes(c),
     features: featureGroups(c),
+    hidden: [],
+    edited: [],
+    layout: { order: { combat: [], explore: [] }, show: {} },
   };
 }
