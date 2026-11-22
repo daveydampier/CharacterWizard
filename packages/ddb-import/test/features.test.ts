@@ -239,6 +239,31 @@ describe('features from a sheet no fixture has', () => {
     });
   });
 
+  describe('species traits above the character\'s level', () => {
+    const trait = (id: number, requiredLevel: unknown) => ({ definition: { id, entityTypeId: 4, name: `Trait ${id}`, requiredLevel } });
+
+    it('leaves out a trait that needs a higher level than the character has', () => {
+      const d = sheet({ race: { racialTraits: [trait(1, null), trait(2, 1), trait(3, 3), trait(4, 5)] } });
+      expect(convertFeatures(d, noLinks).filter((f) => f.origin === 'species').map((f) => f.name)).toEqual(['Trait 1', 'Trait 2', 'Trait 3']);
+    });
+
+    it('lists a trait whose required level is not a number', () => {
+      const d = sheet({ race: { racialTraits: [trait(1, 'x')] } });
+      expect(convertFeatures(d, noLinks).filter((f) => f.origin === 'species').map((f) => f.name)).toEqual(['Trait 1']);
+    });
+
+    it('counts a sheet with no classes as level 0', () => {
+      const d = { race: { racialTraits: [trait(1, null), trait(2, 1)] } };
+      expect(convertFeatures(d, noLinks).map((f) => f.name)).toEqual(['Trait 1']);
+    });
+
+    it('adds up the levels of every class', () => {
+      const d = sheet({ race: { racialTraits: [trait(1, 4)] } });
+      (d.classes as any[]).push({ level: 1, definition: { id: 30, name: 'Scout' }, classFeatures: [] });
+      expect(convertFeatures(d, noLinks).filter((f) => f.origin === 'species')).toHaveLength(1);
+    });
+  });
+
   it('places an option with no listed parent by the list it is in', () => {
     const option = (id: number, name: string) => ({ componentTypeId: 99, componentId: 99, definition: { id, entityTypeId: 2, name } });
     const features = convertFeatures(sheet({

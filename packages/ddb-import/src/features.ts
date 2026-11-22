@@ -126,10 +126,14 @@ const speciesName = (d: Raw): string => str(obj(d.race).fullName) || str(obj(d.r
 export function convertFeatures(d: Raw, links: ReadonlyMap<string, string[]>): Feature[] {
   const species: Place = { origin: 'species', originName: speciesName(d), classIndex: null, level: null };
   const feat: Place = { origin: 'feat', originName: '', classIndex: null, level: null };
+  // The same sum convertCharacter makes.
+  const level = arr(d.classes).reduce((sum: number, c) => sum + (num(obj(c).level) ?? 0), 0);
   const drafts: (Draft | null)[] = [
     ...arr(d.classes).flatMap((c, index) => classDrafts(obj(c), index)),
     ...arr(d.feats).map((f) => obj(obj(f).definition)).map((def) => draft(def, feat, describe(def), null, false)),
-    ...arr(obj(d.race).racialTraits).map((t) => obj(obj(t).definition)).map((def) => draft(def, species, describe(def), null, false)),
+    ...arr(obj(d.race).racialTraits).map((t) => obj(obj(t).definition))
+      .filter((def) => (num(def.requiredLevel) ?? 0) <= level)
+      .map((def) => draft(def, species, describe(def), null, false)),
     backgroundDraft(d),
     ...Object.entries(obj(d.options)).flatMap(([group, items]) =>
       arr(items).map((item) => {
