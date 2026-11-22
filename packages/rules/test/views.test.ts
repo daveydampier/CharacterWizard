@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { convertCharacter } from '@cw/ddb-import';
-import { buildSheet, combatGroups, exploreAbilities } from '../src/index';
+import { applyEdits, buildSheet, combatGroups, emptyEdits, exploreAbilities } from '../src/index';
 import { SLUGS, loadRaw } from '../../../test-utils/fixtures';
 
 const sheetOf = (slug: (typeof SLUGS)[number]) => buildSheet(convertCharacter(loadRaw(slug)));
@@ -17,6 +17,24 @@ describe('combatGroups', () => {
     expect(groups.reaction.map((a) => a.name)).toEqual(['Hellish Rebuke', 'Hellish Rebuke']);
     expect(groups.free.map((a) => a.name)).toContain('Luck Points');
     expect(groups.other).toEqual([]);
+  });
+
+  it('keeps passive abilities apart from the ones that need no action', () => {
+    const base = sheetOf('vlad');
+    const hex = base.abilities.find((a) => a.name === 'Hex');
+    if (!hex) throw new Error('no Hex');
+    const before = combatGroups(base);
+    const edits = { ...emptyEdits(), abilities: { [hex.key]: { timing: 'passive' as const } } };
+    const after = combatGroups(applyEdits(base, edits));
+    expect(after.passive.map((a) => a.name)).toEqual([...before.passive.map((a) => a.name), 'Hex']);
+    expect(after.free).toEqual(before.free);
+    expect(after.bonus.map((a) => a.name)).not.toContain('Hex');
+  });
+
+  it.each(SLUGS)('lists only free abilities under "No action needed" and only passive ones under "Always on": %s', (slug) => {
+    const groups = combatGroups(sheetOf(slug));
+    expect(groups.free.every((a) => a.timing === 'free')).toBe(true);
+    expect(groups.passive.every((a) => a.timing === 'passive')).toBe(true);
   });
 
   it('puts abilities with unknown timing in other', () => {

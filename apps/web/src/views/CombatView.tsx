@@ -84,6 +84,7 @@ export function CombatView({ sheet }: { sheet: Sheet }) {
       </Group>
       {groups.other.length > 0 ? <Group title="Other">{rows(groups.other)}</Group> : null}
       {groups.free.length > 0 ? <Folded title="No action needed" count={groups.free.length}>{rows(groups.free)}</Folded> : null}
+      {groups.passive.length > 0 ? <Folded title="Always on" count={groups.passive.length}>{rows(groups.passive)}</Folded> : null}
       {groups.universal.length > 0 ? <Folded title="Anyone can do this">{rows(groups.universal)}</Folded> : null}
       <Folded title="Keep in mind" count={sheet.notes.length}>
         <NotesList notes={sheet.notes} empty="No conditional notes on this sheet." />

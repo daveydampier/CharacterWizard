@@ -15,6 +15,7 @@ const COMBAT_SECTIONS: { group: CombatGroupName; title: string }[] = [
   { group: 'reaction', title: 'Reaction' },
   { group: 'other', title: 'Other' },
   { group: 'free', title: 'No action needed' },
+  { group: 'passive', title: 'Always on' },
   { group: 'universal', title: 'Anyone can do this' },
 ];
 

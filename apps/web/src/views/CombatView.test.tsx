@@ -1,11 +1,11 @@
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import type { Slug } from '../../../../test-utils/fixtures';
 import { CharacterScreen } from '../screens/Character';
 import { memoryStorage } from '../storage';
 import { useStore } from '../store';
-import { seed, testRemote } from '../test/helpers';
+import { ability, seed, testRemote } from '../test/helpers';
 
 async function openCombat(slug: Slug) {
   const record = await seed(slug);
@@ -31,6 +31,18 @@ describe('Combat view', () => {
     expect(screen.getByText('No action needed (7)')).toBeInTheDocument();
     expect(screen.getByText('Anyone can do this')).toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'Other' })).toBeNull();
+  });
+
+  it('lists passive abilities under "Always on", with no Use button on one that costs nothing', async () => {
+    await openCombat('vlad');
+    expect(screen.queryByText(/^Always on/)).toBeNull();
+    act(() => useStore.getState().setEdit(ability('Unarmed Strike').key, { timing: 'passive' }));
+    await userEvent.click(await screen.findByText('Always on (1)'));
+    expect(within(row('Unarmed Strike')).queryByRole('button', { name: 'Use Unarmed Strike' })).toBeNull();
+    expect(screen.getByText('No action needed (7)')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Edit list' }));
+    const section = screen.getByRole('region', { name: 'Always on' });
+    expect(within(section).getByRole('button', { name: 'Hide Unarmed Strike' })).toBeInTheDocument();
   });
 
   it('uses an ability: spends the pill and the slot, shows concentration and offers undo', async () => {

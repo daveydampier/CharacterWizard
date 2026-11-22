@@ -6,8 +6,10 @@ export interface CombatGroups {
   action: Ability[];
   bonus: Ability[];
   reaction: Ability[];
-  /** "No action needed": timing free or passive. */
+  /** "No action needed": timing free. */
   free: Ability[];
+  /** "Always on": timing passive. Reminders, kept apart from what the player chooses to do. */
+  passive: Ability[];
   /** Timing the import could not tell, and abilities the player put in Combat that have no group there. */
   other: Ability[];
   /** "Anyone can do this": the universal actions. */
@@ -21,11 +23,11 @@ export type CombatGroupName = keyof CombatGroups;
  * minute or more, or the player has chosen otherwise.
  */
 export function combatGroups(sheet: Sheet): CombatGroups {
-  const groups: CombatGroups = { action: [], bonus: [], reaction: [], free: [], other: [], universal: [] };
+  const groups: CombatGroups = { action: [], bonus: [], reaction: [], free: [], passive: [], other: [], universal: [] };
   for (const a of sheet.abilities) {
     if (!viewsOf(sheet, a).combat) continue;
     if (a.timing === 'action' || a.timing === 'bonus' || a.timing === 'reaction') groups[a.timing].push(a);
-    else if (a.timing === 'free' || a.timing === 'passive') groups.free.push(a);
+    else if (a.timing === 'free' || a.timing === 'passive') groups[a.timing].push(a);
     else groups.other.push(a);
   }
   groups.universal = sheet.universal.filter((a) => viewsOf(sheet, a).combat);
