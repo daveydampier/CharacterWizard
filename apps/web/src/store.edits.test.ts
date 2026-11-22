@@ -97,6 +97,18 @@ describe('editing an ability', () => {
     expect(state().undo).toBeNull();
   });
 
+  it('keeps what was spent when an ability is hidden and then restored', async () => {
+    await seed('danger');
+    const wind = ability('Second Wind');
+    state().use(wind, 'combat');
+    expect(state().play.spent[wind.key]).toBe(1);
+    state().setEdit(wind.key, { hidden: true });
+    expect(state().play.spent[wind.key]).toBe(1);
+    state().setEdit(wind.key, {});
+    expect(state().play.spent[wind.key]).toBe(1);
+    expect(state().sheet?.resources.some((r) => r.key === wind.key)).toBe(true);
+  });
+
   it('ends concentration on an ability that is hidden', async () => {
     await seed('vlad');
     const hex = ability('Hex');

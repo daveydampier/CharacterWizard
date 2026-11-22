@@ -6,7 +6,7 @@ import {
   applyEdits, defaultViews, diffEdit, editForm, emptyEdits, hiddenByDefault, viewsOf, withHidden,
 } from '../src/edits';
 import { featureAbility, featureGroups, isFeatureKey } from '../src/features';
-import { applyUse, availability, emptyPlayState, pools } from '../src/play';
+import { applyUse, availability, clampState, emptyPlayState, pools, rest } from '../src/play';
 import { buildSheet, type Sheet } from '../src/sheet';
 import { combatGroups, exploreAbilities } from '../src/views';
 
@@ -144,6 +144,43 @@ describe('ticking a feature into a view', () => {
     expect(sheet.resources).toEqual(base.resources);
     expect(sheet.unshownResources).toEqual([{ key, name: 'Alert', max: 2, reset: 'long' }]);
     expect(editForm(sheet, sheet.featureRows[key])).toMatchObject({ uses: { max: 2, reset: 'long' }, inCombat: false, inExplore: false });
+  });
+
+  it('keeps what was spent from a feature\'s pool while it is in neither view, so re-ticking it is no refill', () => {
+    const base = sheetOf('vlad');
+    const key = feature(base, 'Alert').key;
+    const uses = { max: 2, reset: 'long' as const };
+    const ticked = edited(base, { Alert: { inCombat: true, uses } });
+    const row = ticked.abilities.find((a) => a.key === key);
+    if (!row) throw new Error('no row');
+    const spent = applyUse(row, ticked, emptyPlayState(), 'explore');
+    const unticked = edited(base, { Alert: { uses } });
+    expect(pools(unticked).some((p) => p.key === key)).toBe(false);
+    const kept = clampState(spent, unticked);
+    expect(kept.spent).toEqual({ [key]: 1 });
+    expect(clampState(kept, edited(base, { Alert: { inCombat: true, uses } })).spent).toEqual({ [key]: 1 });
+    // An edit that lowers the maximum of the pool that is not shown still clamps it.
+    expect(clampState({ ...kept, spent: { [key]: 2 } }, edited(base, { Alert: { uses: { max: 1, reset: 'long' } } })).spent)
+      .toEqual({ [key]: 1 });
+  });
+
+  it('restores a pool that is not shown on a rest, by the same rules as a shown one', () => {
+    const base = sheetOf('vlad');
+    const longKey = feature(base, 'Alert').key;
+    const neverKey = feature(base, 'Languages').key;
+    const sheet = edited(base, { Alert: { uses: { max: 2, reset: 'long' } }, Languages: { uses: { max: 2, reset: 'never' } } });
+    expect(sheet.unshownResources.map((r) => r.key).sort()).toEqual([longKey, neverKey].sort());
+    const state = { ...emptyPlayState(), spent: { [longKey]: 1, [neverKey]: 1 } };
+    expect(rest('short', sheet, state).spent).toEqual(state.spent);
+    expect(rest('long', sheet, state).spent).toEqual({ [neverKey]: 1 });
+  });
+
+  it('forgets what was spent from a pool that is gone, once the edit that made it is removed', () => {
+    const base = sheetOf('vlad');
+    const key = feature(base, 'Alert').key;
+    const state = { ...emptyPlayState(), spent: { [key]: 1 } };
+    expect(clampState(state, edited(base, { Alert: { uses: { max: 2, reset: 'long' } } })).spent).toEqual({ [key]: 1 });
+    expect(clampState(state, edited(base, {})).spent).toEqual({});
   });
 
   it('adds no row for a feature that already has an ability, whatever its edit says', () => {

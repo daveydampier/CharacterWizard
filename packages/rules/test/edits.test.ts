@@ -422,6 +422,17 @@ describe('the editor\'s form', () => {
     expect(diffEdit(sheet, surge, { ...form, hidden: false })).toEqual({});
   });
 
+  it('keeps what was spent while an ability is hidden, so restoring it is no refill', () => {
+    const sheet = sheetOf('danger');
+    const wind = named(sheet, 'Second Wind');
+    const spent = applyUse(wind, sheet, emptyPlayState());
+    const hidden = applyEdits(sheet, edits({ abilities: { [wind.key]: { hidden: true } } }));
+    expect(pools(hidden).some((p) => p.key === wind.key)).toBe(false);
+    const whileHidden = clampState(spent, hidden);
+    expect(whileHidden.spent).toEqual({ [wind.key]: 1 });
+    expect(clampState(whileHidden, applyEdits(sheet, emptyEdits())).spent).toEqual({ [wind.key]: 1 });
+  });
+
   it('never records uses for an ability that costs a spell slot', () => {
     const sheet = sheetOf('vlad');
     const hex = named(sheet, 'Hex');

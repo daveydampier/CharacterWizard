@@ -44,6 +44,15 @@ export function pools(sheet: Sheet): Pool[] {
   return out;
 }
 
+/**
+ * Every pool the play state may hold a spent count for: those shown, and those that are not
+ * shown because nothing listed spends them (section 5.4). What is spent from one that is not
+ * shown is kept, so that hiding and restoring an ability is not a free refill.
+ */
+function trackedPools(sheet: Sheet): Pool[] {
+  return [...pools(sheet), ...sheet.unshownResources.map((r): Pool => ({ ...r, kind: 'uses' }))];
+}
+
 export function remaining(pool: Pool, state: PlayState): number {
   return Math.max(0, pool.max - (state.spent[pool.key] ?? 0));
 }
@@ -156,7 +165,7 @@ export function startTurn(state: PlayState): PlayState {
  */
 export function rest(kind: 'short' | 'long', sheet: Sheet, state: PlayState): PlayState {
   const spent = { ...state.spent };
-  for (const pool of pools(sheet)) {
+  for (const pool of trackedPools(sheet)) {
     if (pool.reset === 'short' || (kind === 'long' && pool.reset === 'long')) delete spent[pool.key];
   }
   return { spent, concentrationKey: kind === 'long' ? null : state.concentrationKey, turn: freshTurn() };
@@ -179,10 +188,13 @@ export function endConcentration(state: PlayState): PlayState {
   return { ...state, concentrationKey: null };
 }
 
-/** After a re-import: clamp to the new maximums, forget pools and concentration that no longer exist. */
+/**
+ * After a re-import or an edit: clamp to the new maximums, forget pools and concentration that no
+ * longer exist. A pool that is not shown still exists, and keeps what was spent from it.
+ */
 export function clampState(state: PlayState, sheet: Sheet): PlayState {
   const spent: Record<string, number> = {};
-  for (const pool of pools(sheet)) {
+  for (const pool of trackedPools(sheet)) {
     const value = Math.min(pool.max, Math.max(0, Math.floor(state.spent[pool.key] ?? 0)));
     if (value > 0) spent[pool.key] = value;
   }
