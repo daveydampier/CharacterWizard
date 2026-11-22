@@ -29,7 +29,7 @@ The app is built for any D&D Beyond character, not for the characters used to te
 | Who may use it | Anyone can sign in with Discord. A new account can do nothing until a table admin approves it in the app |
 | Table admin | Can open and edit every character at the table, exactly as its owner can |
 | Edits | A player's changes are layered over the imported sheet by ability key and survive a re-import. Playing and arranging are separate modes |
-| Features | A third page, Features, lists every class and subclass feature, feat, species trait and option on the sheet. None of them is added to Combat or Explore by the app; the player chooses which ones are, feature by feature. Nothing is filtered out by name |
+| Features | A third page, Features, lists every class and subclass feature, feat, species trait and option on the sheet, except those D&D Beyond hides on its own sheet. None of them is added to Combat or Explore by the app; the player chooses which ones are, feature by feature. Nothing is filtered out by name |
 | Play tracking | The app tracks the turn (Action, Bonus Action, Reaction) and limited-use resources (spell slots, feature uses). Hit points and conditions stay on D&D Beyond or paper |
 | Suggestion intelligence | Deterministic rules plus tags. No machine learning and no LLM in this version |
 | Homebrew | First-class. Every ability is tagged from one of three sources: imported data, curated SRD data, or user edits. The engine reads only tags |
@@ -293,7 +293,7 @@ An edit whose ability is not on the sheet (an unequipped weapon, a feature lost 
 
 ### 5.5 Features (milestone 3)
 
-An ability is something the character can do. A feature is something the sheet says the character has: a class or subclass feature, a feat, a species trait, or an option chosen within one of those. Most features have no ability of their own (Danger Sense, Extra Attack, Darkvision), so before this section the app did not show them at all. Across the eight fixtures, each character has between 17 and 26 features with no ability.
+An ability is something the character can do. A feature is something the sheet says the character has: a class or subclass feature, a feat, a species trait, or an option chosen within one of those. Most features have no ability of their own (Danger Sense, Extra Attack, Darkvision), so before this section the app did not show them at all. Across the eight fixtures, the Features page shows between 20 and 41 features for each character, and between 15 and 25 of them have no ability.
 
 A feature is its own record type, kept in its own list beside the abilities.
 
@@ -303,10 +303,12 @@ interface Feature {
   name: string;
   origin: 'class' | 'subclass' | 'feat' | 'species' | 'background';
   originName: string;        // the class, subclass, species or background by name; empty for a feat
-  level: number | null;      // the class level that grants it; null outside a class
+  classIndex: number | null; // which of the character's classes grants it; null outside a class
+  level: number | null;      // the class level that grants it; null outside a class and for an option
   parentKey: string | null;  // for an option, the feature that offers it
   description: string;       // from the player's own sheet
   playKeys: string[];        // the abilities the sheet attaches to this feature
+  hiddenOnSheet: boolean;    // D&D Beyond's own flag: it does not show this entry on its sheet
 }
 ```
 
@@ -322,7 +324,9 @@ interface Feature {
 
 A class feature carries the ID of the class or subclass that defines it, which is how the two are told apart here. Action rows do not carry it, which is why section 5.1 gives both the source `class`. An option whose parent is not listed takes its origin from the list it is in: `class` and the first class, `feat`, or `species`.
 
-**Nothing is filtered:** every entry in those lists is a feature. The converter keeps no list of names to leave out, so bookkeeping entries (Ability Score Improvement, Size, Languages) are listed with the rest, and the player hides them (Part B). D&D Beyond's own "hide in sheet" flag is not used: it marks one or two entries per character, and among them are Rage and Innate Sorcery.
+**Nothing is filtered by name:** every entry in those lists is a feature. The converter keeps no list of names to leave out, so bookkeeping entries (Ability Score Improvement, Size, Speed) are listed with the rest, and the player hides them (Part B).
+
+**What the sheet itself hides:** D&D Beyond marks some entries "hide in sheet" and does not show them on its own sheet. The converter keeps them and sets `hiddenOnSheet`; the Features page leaves them out, and from Part B they start in its "Hidden" drawer, where Restore brings one back. In the eight fixtures the flag marks one or two entries per character: Languages on every one, a container for options (Eldritch Invocation Options), and the second copy of a feature that the sheet lists twice. Rage and Innate Sorcery are each listed twice; the copy that carries the action is not flagged, and the other is. Following the flag is what stops those two from showing twice.
 
 **Feature key:** `feature:{entityTypeId}:{id}`, from D&D Beyond's own IDs. A feature with a name and no ID is keyed by a hash of its origin and name. Two features with the same key follow the rule for actions in section 5.1: the first keeps it and each later one gets `#2`, `#3` and so on. In the eight fixtures every feature has an ID and no two share a key.
 
@@ -330,7 +334,7 @@ A class feature carries the ID of the class or subclass that defines it, which i
 
 **Play rows:** `playKeys` holds the keys of the abilities, actions and granted spells alike, whose granting component on the sheet is this feature. The match is on D&D Beyond's component type and ID, never on a name. In the eight fixtures, 54 actions belong to a listed feature (Rage, Lucky, Font of Magic, Polearm Master), and so do 41 of the 44 granted spells; the other 3 come from items. Another 47 actions belong to a feature the sheet does not list; they stay in Combat as before and no feature refers to them.
 
-**Order:** one group for each class in sheet order, then Feats, then the species, then the background. Within a class, features are ordered by level, then by the sheet's display order, then by their position on the sheet; subclass features sit among the class's own at their level. Feats and species traits keep the sheet's order. An option comes straight after the feature that offers it. An option whose parent is not listed goes to the end of the group for its kind. `packages/rules` does the grouping and ordering; the page only draws the result.
+**Order:** one group for each class in sheet order, then Feats, then the species, then the background. Within a class, features are ordered by level, then by the sheet's display order, then by their position on the sheet; subclass features sit among the class's own at their level. Feats and species traits keep the sheet's order. An option comes straight after the feature that offers it. An option whose parent is not listed goes to the end of the group for its kind, and so does one whose parent is another option or is hidden. `ddb-import` puts each list in this order, because the display order is D&D Beyond's. `packages/rules` makes the groups, puts options under their features and leaves out what is hidden; the page only draws the result.
 
 **Unknown shapes:** an entry with no name is left out. Any other missing or malformed field takes a default (no level, an empty description, no parent). A list that is missing or is not a list yields no features. Nothing in this section can stop a character from opening.
 
@@ -338,7 +342,7 @@ A class feature carries the ID of the class or subclass that defines it, which i
 
 - **inCombat, inExplore:** for a feature, unset means not listed, whatever its timing and tags. The app never adds a feature to a play view; only the player's tick does. A feature ticked into a view is listed there as an ability built from it: the feature's key, name and description, the source that matches its origin (`class` for a subclass feature), timing `passive`, and no roll, cost or tags.
 - **Timing, uses, tags, roll:** apply to that ability as they do to any other. They have no effect on the Features page.
-- **hidden:** the feature leaves the Features page and both play views, and is listed in the Features page's "Hidden" drawer. Hiding a feature does not hide the abilities in its `playKeys`; those are hidden by their own keys.
+- **hidden:** the feature leaves the Features page and both play views, and is listed in the Features page's "Hidden" drawer. Hiding a feature does not hide the abilities in its `playKeys`; those are hidden by their own keys. Unset, a feature is hidden when `hiddenOnSheet` is true and shown otherwise; Restore sets it to false.
 - **order.features:** as `order.combat`, within a group of the Features page. It orders a group's features; an option moves with its parent. An option whose parent is hidden is listed as one whose parent is missing.
 - **A feature with `playKeys`** can be hidden and moved, and is not offered the other fields: it is already in play as those abilities, which are edited where they are listed. The cost: a feature with several parts, only one of which has an ability (War Caster), cannot be added to a play view as a reminder of the rest. The player adds a custom ability for that.
 
@@ -461,7 +465,7 @@ Every view is phone first. Each is one scrolling page.
 
 ### 10.1 Combat
 
-- Header with character name and a Combat / Explore / Features switch. Features is section 10.6.
+- Header with character name and, on a row of its own below it, a Combat / Explore / Features switch. Three choices do not fit beside the name on a phone. Features is section 10.6.
 - Turn tracker: three pills for Action, Bonus Action and Reaction, pinned while the list scrolls. Tapping a pill flips it.
 - Resources: this character's pools as chips with tappable pips.
 - A banner naming the current concentration effect, with a control to end it.
@@ -553,7 +557,7 @@ Hide, order and edit work on any row, including the universal actions. The unive
 
 The third choice in the header switch. It answers "what does my character have?", where Combat and Explore answer "what can I do now?".
 
-- It lists every feature of section 5.5, in that section's groups and order. Each group has a heading: the class's name and level, "Feats", the species' name, the background's name. A group with nothing in it is not shown.
+- It lists every feature of section 5.5 that the sheet does not itself hide, in that section's groups and order. Each group has a heading: the class's name and level, "Feats", the species' name, the background's name. A group with nothing in it is not shown.
 - A row has the feature's name. A class or subclass feature also says where it comes from and at what level ("Warlock, level 2"; a subclass feature names the subclass). An option is indented under the feature that offers it.
 - A feature that has rows in play carries the label "In play".
 - Tapping a row opens its description, as section 10.3 describes. A feature with no description says so.
@@ -663,7 +667,7 @@ Each milestone is usable on its own and gets its own implementation plan.
 - Live updates between devices. A change made elsewhere arrives at the next fetch, within 30 seconds.
 - A conflict screen. The later change wins (section 12).
 - An admin creating a character for another player, or moving a character between players.
-- The app deciding which features matter in play. Nothing on the sheet separates Danger Sense from Languages, and a list of names would break the principle in section 1. The player ticks the ones they want.
+- The app deciding which features matter in play. Nothing on the sheet separates Danger Sense from Size, and a list of names would break the principle in section 1. The player ticks the ones they want.
 - Search on the Features page, and adding a feature by hand. A custom ability covers the second.
 
 The ability key and overlay model leave room for the first three without rework.
@@ -676,7 +680,7 @@ The ability key and overlay model leave room for the first three without rework.
 | A public release would lean on an unofficial endpoint and D&D Beyond's terms | Out of scope now; must be revisited before any public launch |
 | Homebrew authored as text only | The ability editor (timing, uses, tags, roll) and custom abilities cover every case by hand |
 | Sheet maths disagrees with D&D Beyond | Fixture tests against every available real sheet; any ability's roll can be replaced. The sheet's own numbers cannot be overridden yet (section 16) |
-| The Features page is long, and part of it is bookkeeping (Size, Languages, Ability Score Improvement) | Accepted until Part B, which lets the player hide and reorder. The alternative is a list of names to leave out |
+| The Features page is long, and part of it is bookkeeping (Size, Speed, Ability Score Improvement) | Accepted until Part B, which lets the player hide and reorder. The alternative is a list of names to leave out |
 | A new player does not know which features to tick into Combat | Accepted for now. Milestone 4's curated tags are where the app could suggest some, by tag and not by name |
 | Two people change the same item at once and one change is lost silently | Accepted. Items are small (one ability's edits, one view's order), so it needs the same item on two devices within one fetch interval |
 | A table admin spends a player's resources by accident while their character is open | Accepted, to avoid a read-only mode. Undo reverses the slip |
