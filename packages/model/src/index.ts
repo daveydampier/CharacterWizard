@@ -167,6 +167,31 @@ export interface SkillCustom {
   ability?: AbilityName;
 }
 
+/**
+ * Something the sheet says the character has: a class or subclass feature, a feat, a species trait,
+ * an option chosen within one of those, or the background's own feature. Most have no ability.
+ */
+export interface Feature {
+  /** `feature:{entityTypeId}:{id}`. Stable across re-imports. */
+  key: string;
+  name: string;
+  origin: 'class' | 'subclass' | 'feat' | 'species' | 'background';
+  /** The class, subclass, species or background by name. Empty for a feat. */
+  originName: string;
+  /** Position of the granting class in `Character.classes`. Null outside a class. */
+  classIndex: number | null;
+  /** The class level that grants it. Null outside a class, and for an option. */
+  level: number | null;
+  /** For an option, the key of the feature that offers it. */
+  parentKey: string | null;
+  /** From the player's own sheet. HTML. */
+  description: string;
+  /** Keys of the abilities the sheet attaches to this feature. */
+  playKeys: string[];
+  /** D&D Beyond's own flag: it does not show this entry on its sheet. */
+  hiddenOnSheet: boolean;
+}
+
 /** The app's own character format. Importers produce it; the rules engine consumes it. */
 export interface Character {
   id: number;
@@ -184,6 +209,7 @@ export interface Character {
   chargedItems: ChargedItem[];
   spells: SpellEntry[];
   actions: ActionEntry[];
+  features: Feature[];
 }
 
 export type Roll =

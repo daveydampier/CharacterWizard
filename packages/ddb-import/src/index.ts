@@ -1,6 +1,7 @@
 import type { Character } from '@cw/model';
 import { linkedActions } from './actions';
 import { convertClasses } from './classes';
+import { convertFeatures, playLinks } from './features';
 import { convertArmor, convertChargedItems, convertWeapons } from './items';
 import { convertModifiers } from './modifiers';
 import { num, obj, str } from './raw';
@@ -32,5 +33,6 @@ export function convertCharacter(input: unknown): Character {
     chargedItems: convertChargedItems(d),
     spells: spells.map((l) => l.entry),
     actions: actions.map((l) => l.entry),
+    features: convertFeatures(d, playLinks([...actions, ...spells])),
   };
 }
