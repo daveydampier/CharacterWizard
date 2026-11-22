@@ -243,6 +243,18 @@ describe('featureLabels', () => {
     expect(Object.values(labelsOf(c, []))).toEqual(['Keen Nose (Feats)', 'Keen Nose (Feats) 2', 'Keen Nose (Feats) 3']);
   });
 
+  it('keeps a number with its feature when the player moves one twin above the other, or hides one', () => {
+    const c = character([feature('Keen Nose', { key: 'feature:1:a' }), feature('Keen Nose', { key: 'feature:1:b' })]);
+    const source = featureSource(c);
+    const expected = { 'feature:1:a': 'Keen Nose (Feats)', 'feature:1:b': 'Keen Nose (Feats) 2' };
+    expect(featureLabels(arrangeFeatures(source, new Set()), [], source)).toEqual(expected);
+    const moved = arrangeFeatures(source, new Set(), ['feature:1:b', 'feature:1:a']);
+    expect(moved[0].items.map((item) => item.feature.key)).toEqual(['feature:1:b', 'feature:1:a']);
+    expect(featureLabels(moved, [], source)).toEqual(expected);
+    const [first] = c.features;
+    expect(featureLabels(arrangeFeatures(source, new Set([first.key])), [first], source)).toEqual(expected);
+  });
+
   it('uses the class line for a class feature, and the heading for one with no level', () => {
     const c = character([
       feature('Tough Hide', { key: 'feature:1:a', origin: 'class', originName: 'Fighter', classIndex: 0, level: 3 }),
