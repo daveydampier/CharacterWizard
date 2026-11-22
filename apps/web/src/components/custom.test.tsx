@@ -220,6 +220,34 @@ describe('adding a custom ability', () => {
     expect(state().edits.custom[0]).toMatchObject({ roll: { kind: 'dice', dice: '1d6' }, cost: { kind: 'uses', max: 3, reset: 'long' } });
   });
 
+  it('refuses a roll number out of range or a fraction, and a damage type with no dice', async () => {
+    await open('franny');
+    const dialog = await add();
+    await fill('Name', 'Pack Howl');
+    await choose('Roll', 'Attack roll');
+    for (const text of ['41', '1.5']) {
+      await fill('Attack bonus', text);
+      await tap('Save');
+      expect(within(dialog).getByRole('alert')).toHaveTextContent('Set the attack bonus, from -20 to 40.');
+    }
+    await fill('Attack bonus', '4');
+    await fill('Damage type', 'thunder');
+    await tap('Save');
+    expect(within(dialog).getByRole('alert')).toHaveTextContent('Give the damage its dice, or clear its type.');
+    await choose('Roll', 'Saving throw');
+    await fill('DC', '0');
+    await tap('Save');
+    expect(within(dialog).getByRole('alert')).toHaveTextContent('Set the DC, from 1 to 40.');
+    expect(state().edits.custom).toEqual([]);
+    await fill('DC', '14');
+    await fill('Damage', '2d6');
+    await fill('Damage type', 'thunder');
+    await tap('Save');
+    expect(state().edits.custom[0]).toMatchObject({
+      roll: { kind: 'save', ability: 'str', dc: 14, damage: [{ dice: '2d6', type: 'thunder' }] },
+    });
+  });
+
   it('saves nothing on Cancel', async () => {
     await open('franny');
     await add();

@@ -1,5 +1,5 @@
-import { TAGS, type ResetType, type Tag, type Timing } from '@cw/model';
-import { defaultViews } from '@cw/rules';
+import { TAGS, type ResetType, type Roll, type Tag, type Timing } from '@cw/model';
+import { ROLL_BONUS_RANGE, ROLL_DC_RANGE, defaultViews, normaliseRoll } from '@cw/rules';
 import { useId } from 'react';
 import { CHECK, INPUT, LABEL } from './fieldStyles';
 
@@ -25,6 +25,42 @@ const UNKNOWN = { value: 'unknown', label: 'Unknown' } as const;
 
 export const ROLL_ERROR = 'Finish the roll, or choose No roll.';
 export const MAX_USES_ERROR = 'Set the maximum uses, from 1 to 99.';
+
+type Range = { readonly min: number; readonly max: number };
+const outside = (value: number, range: Range): boolean =>
+  Number.isFinite(value) && (!Number.isInteger(value) || value < range.min || value > range.max);
+
+/**
+ * What is wrong with the numbers of a roll the player changed, in words; null when nothing is.
+ * A number the app would have to change to store (out of range, or a fraction) is refused, and
+ * so is a damage part with a type and no dice, which would be dropped. An empty number is not
+ * caught here: that is an unfinished roll.
+ */
+export function rollError(roll: Roll): string | null {
+  if (roll.kind === 'attack' && outside(roll.bonus, ROLL_BONUS_RANGE)) {
+    return `Set the attack bonus, from ${ROLL_BONUS_RANGE.min} to ${ROLL_BONUS_RANGE.max}.`;
+  }
+  if (roll.kind === 'check' && outside(roll.bonus, ROLL_BONUS_RANGE)) {
+    return `Set the bonus, from ${ROLL_BONUS_RANGE.min} to ${ROLL_BONUS_RANGE.max}.`;
+  }
+  if (roll.kind === 'save' && outside(roll.dc, ROLL_DC_RANGE)) return `Set the DC, from ${ROLL_DC_RANGE.min} to ${ROLL_DC_RANGE.max}.`;
+  const parts = roll.kind === 'attack' ? [...roll.damage, ...roll.optionalDamage]
+    : roll.kind === 'save' || roll.kind === 'damage' ? roll.damage : [];
+  if (parts.some((p) => (p.type ?? '').trim() !== '' && p.dice.trim() === '')) return 'Give the damage its dice, or clear its type.';
+  return null;
+}
+
+/**
+ * The roll to save, or the message saying why it cannot be saved. A roll the player did not touch
+ * (`roll` is `start`) is kept exactly as it is.
+ */
+export function checkedRoll(roll: Roll, start: Roll | null): { roll: Roll } | { error: string } {
+  if (roll === start) return { roll };
+  const problem = rollError(roll);
+  if (problem) return { error: problem };
+  const normalised = normaliseRoll(roll);
+  return normalised ? { roll: normalised } : { error: ROLL_ERROR };
+}
 
 /** True for a maximum the app can store. The field is not a number while it is empty. */
 export const validMaxUses = (max: number): boolean => Number.isInteger(max) && max >= 1 && max <= 99;

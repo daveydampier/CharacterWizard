@@ -13,6 +13,10 @@ const isRecord = (v: unknown): v is Record<string, unknown> =>
 const oneOf = <T extends string>(list: readonly T[], value: unknown): T | null =>
   typeof value === 'string' && (list as readonly string[]).includes(value) ? (value as T) : null;
 
+/** The range a roll's bonus (an attack or a check) and a save's DC are kept within. */
+export const ROLL_BONUS_RANGE = { min: -20, max: 40 } as const;
+export const ROLL_DC_RANGE = { min: 1, max: 40 } as const;
+
 const wholeNumber = (value: unknown, min: number, max: number): number | null =>
   typeof value === 'number' && Number.isFinite(value) ? Math.min(max, Math.max(min, Math.trunc(value))) : null;
 
@@ -60,18 +64,18 @@ export function normaliseRoll(data: unknown): Roll | null {
     case 'none':
       return { kind: 'none' };
     case 'attack': {
-      const bonus = wholeNumber(data.bonus, -20, 40);
+      const bonus = wholeNumber(data.bonus, ROLL_BONUS_RANGE.min, ROLL_BONUS_RANGE.max);
       return bonus === null
         ? null
         : { kind: 'attack', bonus, damage: damageParts(data.damage), optionalDamage: damageParts(data.optionalDamage) };
     }
     case 'save': {
       const ability = oneOf<AbilityName>(ABILITIES, data.ability);
-      const dc = wholeNumber(data.dc, 1, 40);
+      const dc = wholeNumber(data.dc, ROLL_DC_RANGE.min, ROLL_DC_RANGE.max);
       return ability === null || dc === null ? null : { kind: 'save', ability, dc, damage: damageParts(data.damage) };
     }
     case 'check': {
-      const bonus = wholeNumber(data.bonus, -20, 40);
+      const bonus = wholeNumber(data.bonus, ROLL_BONUS_RANGE.min, ROLL_BONUS_RANGE.max);
       return bonus === null ? null : { kind: 'check', bonus };
     }
     case 'damage': {

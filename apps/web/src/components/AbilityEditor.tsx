@@ -1,11 +1,11 @@
-import type { Ability, ResetType, Roll, Tag, UsesEdit } from '@cw/model';
-import { canEditUses, defaultViews, diffEdit, editForm, isFeatureKey, normaliseRoll, type EditForm } from '@cw/rules';
+import type { Ability, ResetType, Tag, UsesEdit } from '@cw/model';
+import { canEditUses, defaultViews, diffEdit, editForm, isFeatureKey, type EditForm } from '@cw/rules';
 import { useState, type FormEvent } from 'react';
 import { useStore } from '../store';
 import { Dialog } from './Dialog';
 import { RollEditor } from './RollEditor';
 import {
-  MAX_USES_ERROR, ROLL_ERROR, ShownIn, TagToggles, TimingSelect, UsesFields, validMaxUses, withViews, type ViewsChosen,
+  MAX_USES_ERROR, ShownIn, TagToggles, TimingSelect, UsesFields, checkedRoll, validMaxUses, withViews, type ViewsChosen,
 } from './editorFields';
 import { ALERT, BUTTON, CHECK, PRIMARY } from './fieldStyles';
 
@@ -67,10 +67,9 @@ export function AbilityEditor({ ability, onClose }: { ability: Ability; onClose:
       setError(MAX_USES_ERROR);
       return;
     }
-    // A roll the player did not touch is taken as it stands now; one they changed must be a finished roll.
-    const changedRoll: Roll | null = draft.roll === start.roll ? null : normaliseRoll(draft.roll);
-    if (draft.roll !== start.roll && !changedRoll) {
-      setError(ROLL_ERROR);
+    const checked = checkedRoll(draft.roll, start.roll);
+    if ('error' in checked) {
+      setError(checked.error);
       return;
     }
     const timing = draft.timing !== start.timing ? draft.timing : now.timing;
@@ -86,7 +85,7 @@ export function AbilityEditor({ ability, onClose }: { ability: Ability; onClose:
       timing,
       uses: usesEditable ? (usesChanged ? draftUses : now.uses) : null,
       tags,
-      roll: changedRoll ?? now.roll,
+      roll: draft.roll === start.roll ? now.roll : checked.roll,
       inCombat: view('combat', draft.inCombat, start.inCombat, now.inCombat),
       inExplore: view('explore', draft.inExplore, start.inExplore, now.inExplore),
       hidden: draft.hidden !== start.hidden ? draft.hidden : now.hidden,

@@ -449,6 +449,10 @@ describe('AbilityEditor', () => {
     act(() => useStore.setState({ baseSheet: next, sheet: applyEdits(next, current) }));
   }
 
+  const withRoll = (base: Sheet, key: string, roll: Roll): Sheet => ({
+    ...base, abilities: base.abilities.map((a) => (a.key === key ? { ...a, roll } : a)),
+  });
+
   it('saves a change to an ability whose imported pool is above 99, leaving the uses alone', async () => {
     await open('danger');
     const key = ability('Second Wind').key;
@@ -486,6 +490,72 @@ describe('AbilityEditor', () => {
     await save();
     expect(edits()).toEqual({ [key]: { timing: 'long' } });
     expect(screen.queryByRole('article', { name: 'Hex' })).toBeNull();
+  });
+
+  describe('refuses a roll number out of range, and a damage type with no dice', () => {
+    async function retype(dialog: HTMLElement, label: string, text: string) {
+      const field = within(dialog).getByLabelText(label);
+      await userEvent.clear(field);
+      if (text !== '') await userEvent.type(field, text);
+    }
+
+    it('an attack bonus', async () => {
+      await open('vlad');
+      const dialog = await edit('Wurms Claw - Sword');
+      for (const text of ['41', '-21', '2.5']) {
+        await retype(dialog, 'Attack bonus', text);
+        await save();
+        expect(within(dialog).getByRole('alert')).toHaveTextContent('Set the attack bonus, from -20 to 40.');
+        expect(edits()).toEqual({});
+      }
+      await retype(dialog, 'Attack bonus', '40');
+      await save();
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(edits()[ability('Wurms Claw - Sword').key].roll).toMatchObject({ kind: 'attack', bonus: 40 });
+    });
+
+    it('a DC', async () => {
+      await open('vlad');
+      const dialog = await edit('Hex');
+      await userEvent.selectOptions(within(dialog).getByRole('combobox', { name: 'Roll' }), 'Saving throw');
+      for (const text of ['0', '41', '12.5']) {
+        await retype(dialog, 'DC', text);
+        await save();
+        expect(within(dialog).getByRole('alert')).toHaveTextContent('Set the DC, from 1 to 40.');
+        expect(edits()).toEqual({});
+      }
+      await retype(dialog, 'DC', '1');
+      await save();
+      expect(edits()[ability('Hex').key].roll).toEqual({ kind: 'save', ability: 'str', dc: 1, damage: [] });
+    });
+
+    it('the bonus of a check', async () => {
+      await open('vlad');
+      const key = ability('Hex').key;
+      replaceBase((base) => withRoll(base, key, { kind: 'check', bonus: 3 }));
+      const dialog = await edit('Hex');
+      await retype(dialog, 'Bonus', '50');
+      await save();
+      expect(within(dialog).getByRole('alert')).toHaveTextContent('Set the bonus, from -20 to 40.');
+      expect(edits()).toEqual({});
+      await retype(dialog, 'Bonus', '-20');
+      await save();
+      expect(edits()).toEqual({ [key]: { roll: { kind: 'check', bonus: -20 } } });
+    });
+
+    it('a damage type with no dice', async () => {
+      await open('vlad');
+      const dialog = await edit('Hex');
+      expect(within(dialog).getByLabelText('Damage type')).not.toHaveValue('');
+      await retype(dialog, 'Damage', '');
+      await save();
+      expect(within(dialog).getByRole('alert')).toHaveTextContent('Give the damage its dice, or clear its type.');
+      expect(edits()).toEqual({});
+      await retype(dialog, 'Damage', '1d8');
+      await save();
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(edits()[ability('Hex').key].roll).toMatchObject({ kind: 'damage', damage: [{ dice: '1d8' }] });
+    });
   });
 
   it('tells twins apart on the Edit button and titles the editor with the name', async () => {

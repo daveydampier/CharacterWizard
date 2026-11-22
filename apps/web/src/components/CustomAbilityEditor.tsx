@@ -1,11 +1,11 @@
 import type { AbilityEdit, CustomAbility, ResetType, Roll, Tag, Timing } from '@cw/model';
-import { defaultViews, editForm, normaliseRoll } from '@cw/rules';
+import { defaultViews, editForm } from '@cw/rules';
 import { useId, useState, type FormEvent } from 'react';
 import { newCustomKey, useStore } from '../store';
 import { Dialog } from './Dialog';
 import { RollEditor } from './RollEditor';
 import {
-  MAX_USES_ERROR, ROLL_ERROR, ShownIn, TagToggles, TimingSelect, UsesFields, validMaxUses, withViews, type ViewsChosen,
+  MAX_USES_ERROR, ShownIn, checkedRoll, TagToggles, TimingSelect, UsesFields, validMaxUses, withViews, type ViewsChosen,
 } from './editorFields';
 import { ALERT, BUTTON, CHECK, INPUT, LABEL, PRIMARY } from './fieldStyles';
 
@@ -95,11 +95,13 @@ export function CustomAbilityEditor({ custom, onClose }: { custom: CustomAbility
       setError(MAX_USES_ERROR);
       return;
     }
-    const roll = normaliseRoll(draft.roll);
-    if (!roll) {
-      setError(ROLL_ERROR);
+    // A roll the player did not touch is kept as it was saved.
+    const checked = checkedRoll(draft.roll, custom?.roll ?? null);
+    if ('error' in checked) {
+      setError(checked.error);
       return;
     }
+    const { roll } = checked;
     const cost: CustomAbility['cost'] =
       draft.cost === 'uses'
         ? { kind: 'uses', max: draft.max, reset: draft.reset }
