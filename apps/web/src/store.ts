@@ -1,13 +1,15 @@
 import { convertCharacter } from '@cw/ddb-import';
-import type { Ability, PlayState } from '@cw/model';
+import type { Ability, AbilityEdit, CharacterEdits, CustomAbility, PlayState, ViewName } from '@cw/model';
 import {
-  adjustPool, applyUse, buildSheet, clampState, emptyPlayState, endConcentration, normalisePlayItem,
-  normaliseTurn, pools, rest, startTurn, togglePill, useSummary, type PlayItem, type Sheet,
-  type TurnTiming, type ViewMode,
+  adjustPool, applyEdits, applyUse, buildSheet, clampState, emptyEdits, emptyPlayState, endConcentration,
+  isEmptyEdit, normaliseCustom, normaliseEdit, normaliseOrder, normalisePlayItem, normaliseTurn, pools, rest,
+  startTurn, togglePill, useSummary, withGroupOrder, type PlayItem, type Sheet, type TurnTiming, type ViewMode,
 } from '@cw/rules';
 import { create } from 'zustand';
 import { CHARACTER_LIMIT, RemoteError, defaultRemote, type ImportResult, type Profile, type Remote } from './remote';
-import { STATE_KEY, memoryStorage, openStorage, type AppStorage, type StoredCharacter } from './storage';
+import {
+  STATE_KEY, memoryStorage, openStorage, type AppStorage, type StoredCharacter, type StoredItem, type SyncedKind,
+} from './storage';
 import { characterId, claimLocalCharacters, hasUnsynced, nextStamp, resetCursors, syncOnce } from './sync/engine';
 import { createScheduler, type Scheduler } from './sync/scheduler';
 
@@ -42,7 +44,12 @@ export interface AppStore {
   characters: StoredCharacter[];
   /** The character on screen, its sheet and its play state. */
   openId: string | null;
+  /** The sheet the views show: the imported sheet with the player's edits applied. */
   sheet: Sheet | null;
+  /** The sheet as imported, with no edits. The editor compares against it. */
+  baseSheet: Sheet | null;
+  /** The open character's edits. */
+  edits: CharacterEdits;
   play: PlayState;
   /** False while the open character's saved play state is still being read. Nothing can be changed until it is. */
   loaded: boolean;
@@ -84,7 +91,18 @@ export interface AppStore {
   togglePill(timing: TurnTiming): void;
   endConcentration(): void;
   undoLast(): void;
+  /** Replaces the open character's edits to one ability. An edit that changes nothing removes them. */
+  setEdit(abilityKey: string, edit: AbilityEdit): void;
+  /** Adds a custom ability to the open character, or replaces the one with the same key. */
+  saveCustom(custom: CustomAbility): void;
+  /** Deletes a custom ability and any edits stored under its key. */
+  deleteCustom(abilityKey: string): void;
+  /** Records the order the player gave one group of a view. `groupKeys` is the whole group, in order. */
+  setOrder(view: ViewName, groupKeys: string[]): void;
 }
+
+/** A key for a new custom ability. */
+export const newCustomKey = (): string => `own:${newId()}`;
 
 const META_SESSION = 'session';
 
@@ -93,6 +111,8 @@ let remote: Remote | null = null;
 let scheduler: Scheduler | null = null;
 /** Counts local changes to play state, so a fetch can tell that one happened while it was running. */
 let localChanges = 0;
+/** Counts local changes to edits, so a read of them can tell that one happened while it was running. */
+let localEdits = 0;
 
 /** One sheet per character: a re-import replaces it and a delete drops it. */
 const sheetCache = new Map<string, { importedAt: string; sheet: Sheet }>();
@@ -127,12 +147,40 @@ function sessionFrom(value: unknown): Session | null {
   };
 }
 
-/** A character's saved play state, repaired where it is malformed. Empty when nothing is saved. */
-async function loadPlay(id: string): Promise<PlayState> {
-  const items = await storage.listItems(id);
+/** The play state held in a character's items, repaired where it is malformed. Empty when nothing is saved. */
+function playFrom(items: StoredItem[]): PlayState {
   const data = (kind: 'play' | 'turn'): unknown =>
     items.find((item) => item.kind === kind && item.key === STATE_KEY && !item.deleted)?.data;
   return { ...normalisePlayItem(data('play')), turn: normaliseTurn(data('turn')) };
+}
+
+/** The edits held in a character's items, each checked and repaired. A deleted item is not an edit. */
+export function editsFrom(items: StoredItem[]): CharacterEdits {
+  const edits = emptyEdits();
+  for (const item of items) {
+    if (item.deleted) continue;
+    if (item.kind === 'edit') {
+      const edit = normaliseEdit(item.data);
+      if (!isEmptyEdit(edit)) edits.abilities[item.key] = edit;
+    } else if (item.kind === 'custom') {
+      const custom = normaliseCustom(item.data, item.key);
+      if (custom) edits.custom.push(custom);
+    } else if (item.kind === 'order' && (item.key === 'combat' || item.key === 'explore')) {
+      edits.order[item.key] = normaliseOrder(item.data);
+    }
+  }
+  // Items come back in no particular order; custom abilities are shown by name.
+  edits.custom.sort((a, b) => a.name.localeCompare(b.name) || a.key.localeCompare(b.key));
+  return edits;
+}
+
+/**
+ * A character's saved play state and edits. Empty when nothing is saved. Rejects when what is
+ * saved cannot be read, so that nobody mistakes an unreadable state for an empty one.
+ */
+async function loadSaved(id: string): Promise<{ play: PlayState; edits: CharacterEdits }> {
+  const items = await storage.listItems(id);
+  return { play: playFrom(items), edits: editsFrom(items) };
 }
 
 /**
@@ -171,6 +219,8 @@ function newId(): string {
 const closed = {
   openId: null as string | null,
   sheet: null as Sheet | null,
+  baseSheet: null as Sheet | null,
+  edits: emptyEdits(),
   play: emptyPlayState(),
   loaded: false,
   undo: null as Undo | null,
@@ -216,6 +266,32 @@ export const useStore = create<AppStore>()((set, get) => {
   };
 
   /**
+   * Stores one item of the open character's edits, or marks it deleted when `data` is null, then
+   * rebuilds the sheet from the edits as they now stand. What was spent is clamped to the new
+   * sheet, because an edit can lower a maximum or remove a pool. Every write is started before
+   * this returns, each stamped and written in one step, so a read made afterwards sees them.
+   */
+  const changeEdits = (next: CharacterEdits, writes: { kind: SyncedKind; key: string; data: unknown }[]): void => {
+    const { openId, baseSheet, play, loaded } = get();
+    if (openId === null || baseSheet === null || !loaded) return;
+    const sheet = applyEdits(baseSheet, next);
+    const clamped = clampState(play, sheet);
+    const playChanged = !same(playItem(clamped), playItem(play));
+    localEdits += 1;
+    if (playChanged) localChanges += 1;
+    set({ edits: next, sheet, play: playChanged ? clamped : play, undo: playChanged ? null : get().undo });
+    const started: Promise<unknown>[] = writes.map((write) =>
+      storage.updateItem(openId, write.kind, write.key, (current) => ({
+        put: {
+          characterId: openId, kind: write.kind, key: write.key, data: write.data,
+          updatedAt: nextStamp(current?.updatedAt), deleted: write.data === null, dirty: true,
+        },
+      })));
+    if (playChanged) started.push(savePlay(openId, clamped, play));
+    void save(Promise.all(started)).then(() => changedLocally());
+  };
+
+  /**
    * After a round with the account: show what the device now holds. `changed` are the characters
    * a fetch altered; `sent` is true when characters were waiting to be sent, whose records are
    * now marked clean.
@@ -233,38 +309,44 @@ export const useStore = create<AppStore>()((set, get) => {
       set({ ...closed });
       return;
     }
-    let sheet: Sheet;
+    let baseSheet: Sheet;
     try {
-      sheet = sheetFor(character);
+      baseSheet = sheetFor(character);
     } catch {
       // What was fetched cannot be turned into a sheet (a record damaged in the account, say).
       sheetCache.delete(openId);
       set({ ...closed });
       return;
     }
-    /** What is on screen is the newest copy: it is written again, stamped later than what was fetched, and sent. */
-    const keepScreen = async (): Promise<void> => {
+    // The device's copy of the edits is the newest: every edit made here is written as it is
+    // made, and a fetched edit replaces one only when it is later. So the edits are read back,
+    // and read again if the player made one during the read.
+    let saved: { play: PlayState; edits: CharacterEdits };
+    let editsSeen: number;
+    do {
+      editsSeen = localEdits;
+      try {
+        saved = await loadSaved(openId);
+      } catch {
+        // What was fetched could not be read back: what is on screen stays, and is not replaced by nothing.
+        set({ persistent: false });
+        return;
+      }
       if (get().openId !== openId) return;
+    } while (editsSeen !== localEdits);
+    const sheet = applyEdits(baseSheet, saved.edits);
+    if (localChanges !== changesBefore) {
+      // The player changed what is spent while the fetch was running, or while its result was
+      // being read back. What is on screen is the newest copy: it is written again, stamped later
+      // than what was fetched, and sent.
       const kept = clampState(get().play, sheet);
-      set({ sheet, play: kept });
+      set({ baseSheet, sheet, edits: saved.edits, play: kept });
       await save(savePlay(openId, kept, null));
       changedLocally();
-    };
-    // The player changed what is spent while the fetch was running.
-    if (localChanges !== changesBefore) return keepScreen();
-    let saved: PlayState;
-    try {
-      saved = await loadPlay(openId);
-    } catch {
-      // What was fetched could not be read back: what is on screen stays, and is not replaced by nothing.
-      set({ persistent: false });
       return;
     }
-    if (get().openId !== openId) return;
-    // Or changed it while the fetched state was being read back.
-    if (localChanges !== changesBefore) return keepScreen();
     // The turn never syncs, so the one in memory is the newest.
-    set({ sheet, play: { ...clampState(saved, sheet), turn: get().play.turn }, undo: null });
+    set({ baseSheet, sheet, edits: saved.edits, play: { ...clampState(saved.play, sheet), turn: get().play.turn }, undo: null });
   };
 
   /** No longer a table admin: the other players' characters leave this device. */
@@ -358,6 +440,7 @@ export const useStore = create<AppStore>()((set, get) => {
     }
     sheetCache.clear();
     localChanges = 0;
+    localEdits = 0;
     scheduler = createScheduler(runSync);
     userChanges = Promise.resolve();
     // Ready now: a signed-in device opens from its own copy without waiting for the account.
@@ -469,15 +552,20 @@ export const useStore = create<AppStore>()((set, get) => {
       if (existing) {
         // Re-import: what was spent stays spent, within the new maximums.
         if (get().openId === record.id) {
-          // The open character's play state in memory is the newest copy.
-          const sheet = sheetFor(record);
+          // The open character's play state in memory is the newest copy. Its edits are kept.
+          const baseSheet = sheetFor(record);
+          const sheet = applyEdits(baseSheet, get().edits);
           const before = get().play;
           const play = clampState(before, sheet);
-          set({ sheet, play, undo: null });
+          set({ baseSheet, sheet, play, undo: null });
           await save(savePlay(record.id, play, before));
         } else {
-          const saved = await loadPlay(record.id).catch(() => null);
-          if (saved) await save(savePlay(record.id, clampState(saved, sheetFor(record)), saved));
+          // Clamped to the new sheet with its edits: an edited maximum is the one that counts.
+          const saved = await loadSaved(record.id).catch(() => null);
+          if (saved) {
+            const sheet = applyEdits(sheetFor(record), saved.edits);
+            await save(savePlay(record.id, clampState(saved.play, sheet), saved.play));
+          }
         }
       }
       changedLocally();
@@ -509,18 +597,18 @@ export const useStore = create<AppStore>()((set, get) => {
       }
       // Already open: the play state in memory is the newest copy, even if saving it failed.
       if (get().openId === id && get().sheet) return;
-      let sheet: Sheet;
+      let baseSheet: Sheet;
       try {
-        sheet = sheetFor(character);
+        baseSheet = sheetFor(character);
       } catch {
         // Stored, but no sheet can be built from it (a record damaged in the account, say).
         set({ ...closed });
         return;
       }
-      set({ ...closed, openId: id, sheet });
-      let saved: PlayState;
+      set({ ...closed, openId: id, sheet: baseSheet, baseSheet });
+      let saved: { play: PlayState; edits: CharacterEdits };
       try {
-        saved = await loadPlay(id);
+        saved = await loadSaved(id);
       } catch {
         // What is saved could not be read. Opening with an empty state would let the next change
         // overwrite it, here and in the account, so the character stays closed.
@@ -528,7 +616,9 @@ export const useStore = create<AppStore>()((set, get) => {
         return;
       }
       // Ignore the answer if the player has already moved to another character.
-      if (get().openId === id) set({ play: clampState(saved, sheet), loaded: true });
+      if (get().openId !== id) return;
+      const sheet = applyEdits(baseSheet, saved.edits);
+      set({ sheet, edits: saved.edits, play: clampState(saved.play, sheet), loaded: true });
     },
 
     use(ability, mode, slot) {
@@ -570,6 +660,43 @@ export const useStore = create<AppStore>()((set, get) => {
     undoLast() {
       const { undo } = get();
       if (undo) change(undo.state, null);
+    },
+
+    setEdit(abilityKey, edit) {
+      const { edits } = get();
+      const abilities = { ...edits.abilities };
+      const empty = isEmptyEdit(edit);
+      if (empty && !(abilityKey in abilities)) return;
+      if (empty) delete abilities[abilityKey];
+      else abilities[abilityKey] = edit;
+      changeEdits({ ...edits, abilities }, [{ kind: 'edit', key: abilityKey, data: empty ? null : edit }]);
+    },
+
+    saveCustom(custom) {
+      const { edits } = get();
+      const others = edits.custom.filter((c) => c.key !== custom.key);
+      const { key: _key, ...data } = custom;
+      const next = [...others, custom].sort((a, b) => a.name.localeCompare(b.name) || a.key.localeCompare(b.key));
+      changeEdits({ ...edits, custom: next }, [{ kind: 'custom', key: custom.key, data }]);
+    },
+
+    deleteCustom(abilityKey) {
+      const { edits } = get();
+      if (!edits.custom.some((c) => c.key === abilityKey)) return;
+      const abilities = { ...edits.abilities };
+      const writes: { kind: SyncedKind; key: string; data: unknown }[] = [{ kind: 'custom', key: abilityKey, data: null }];
+      if (abilityKey in abilities) {
+        delete abilities[abilityKey];
+        writes.push({ kind: 'edit', key: abilityKey, data: null });
+      }
+      changeEdits({ ...edits, abilities, custom: edits.custom.filter((c) => c.key !== abilityKey) }, writes);
+    },
+
+    setOrder(view, groupKeys) {
+      const { edits } = get();
+      const order = withGroupOrder(edits.order[view], groupKeys);
+      if (same(order, edits.order[view])) return;
+      changeEdits({ ...edits, order: { ...edits.order, [view]: order } }, [{ kind: 'order', key: view, data: order }]);
     },
   };
 });
