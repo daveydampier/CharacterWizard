@@ -70,10 +70,10 @@ The whole of Part A was reviewed once more after its last task. It found nothing
 
 Also fixed: anyone who signed in before the database script was applied gets a profile when it is applied.
 
-Settle before Part B adds edits, because an edit is not written again by the next tap the way play state is:
+Two faults were left to settle before Part B added edits, because an edit is not written again by the next tap the way play state is. Part B's first two tasks fixed both, each with tests that fail without the fix:
 
-- The sync engine and the store read a record, decide, and write it back in separate storage calls. A change the player makes in between is overwritten and marked as sent. The gap is a few milliseconds. Make each of these one storage operation.
-- The item cursor moves past items whose character the device does not hold yet. A character that arrives a round later, or comes back after being deleted on the device, arrives without its older items. Since a fetch now comes a page at a time, this no longer needs unlucky timing: when a table admin's first fetch is cut short on a weak signal, the characters that arrive in the next round come without their play state until their player next changes something. Start the item fetch from the beginning when a character becomes live on the device.
+- The sync engine and the store read a record, decided, and wrote it back in separate storage calls, so a change the player made in between was overwritten and marked as sent. The device's storage now looks at a record and writes it in one step, and the sync engine, play state and edits all go through that.
+- The item cursor moved past items whose character the device did not hold yet, so a character that arrived a round later, or came back after being deleted on the device, arrived without its older items. The item fetch now starts from the beginning whenever a character becomes live on the device.
 
 Left, smallest first:
 
@@ -98,7 +98,7 @@ Left, smallest first:
 
 The Features page (plan `2026-11-21-features-page.md`) was reviewed task by task and once more as a whole. Found and left, smallest first. None blocks merging.
 
-- The same option chosen under two parents gets `#2` by its position in the sheet's list. Part B stores edits by key, so settle this in Part B's plan.
+- The same option chosen under two parents got `#2` by its position in the sheet's list. Settled in Part B: an option's key now names the feature it is attached to.
 - Two features with the same IDs both get the same play rows. No fixture has one; when it happens it is one entry listed twice.
 - An orphan option from a list the app does not know (the sheet has one for items) is shown among the feats.
 - A feature row's button says whether it is open but does not point at the text it opens. Ability rows have the same shape; change both together.
@@ -106,6 +106,25 @@ The Features page (plan `2026-11-21-features-page.md`) was reviewed task by task
 - `featureLine` shows a level line for any feature that has a level. Only class features have one today.
 - A standard background whose feature name is only spaces is chosen over a custom background's feature, and then left out. It needs a malformed sheet.
 - A feature with no ID is keyed by its trimmed name, so a name that gains or loses a space at its ends keeps its key. Nothing stored a key before this, so no stored edit moved.
+
+## Part B: editing and arranging
+
+Found while Part B's plan (`2026-11-22-milestone-3-part-b-overlays.md`) was being built and checked. Smallest first. None blocks merging.
+
+- A hidden custom ability cannot be deleted until it is restored, because a hidden row offers only Restore.
+- Two hidden rows with the same name have the same "Restore" button name.
+- Saving a custom ability's editor replaces the whole edit stored under its key with where it is shown and whether it is hidden. Any other field there, which only another version of the app could have written, is dropped.
+- When a dialog opens, focus lands on the dialog and not on its first field.
+- Deleting a custom ability, deleting a character and signing out with unsynced changes ask with the browser's own confirm box, not with a dialog of the app's.
+- "Start my turn" stays pinned at the bottom of the Combat view while the list is being arranged.
+- A feature's row in a view comes after every ability in its group until the player arranges that group.
+- Hide on a feature's row in a view's "Edit list" hides the feature everywhere, the Features page included. Unticking "Shown in" is how to take it out of one view. The row can be restored from either "Hidden" drawer.
+- A feature's options keep the sheet's order under it. They can be edited and hidden, and cannot be put in order among themselves.
+- Only four pools are shown above the list before "more", so a pool the player has just given a feature or an ability can be behind that button.
+- A re-import still takes its time stamp from the copy in memory, and deleting a character is still two storage steps (listed above under Part A). Only the sync engine, play state and edits were moved to the one-step write.
+- The JavaScript bundle is over 600 kB before compression, mostly supabase-js and dnd-kit. Milestone 5 (offline and install) is the place to split it.
+
+Decided, and to revisit if it annoys: a feature that already has rows in play is not offered "Shown in". A feat with several parts, only one of which has an ability, cannot be ticked into a view as a reminder of the rest; the player adds a custom ability for that (spec section 5.5).
 
 ## Task 13: done
 
@@ -133,5 +152,8 @@ What Task 13's steps got wrong, found with Supabase CLI 3.2.0. The plan and the 
 - Whether a successful fetch from the character service redirects. An unknown ID answers 403 directly; the import function now follows no redirects.
 - An offline start, end to end: sign in, wait more than an hour, turn on aeroplane mode, open the app. It should say the changes are waiting, not "Sign in again to sync", and sync by itself within about two minutes of the connection coming back, while the app is on screen (the auth library waits a minute after a renewal fails, then tries every 30 seconds). Tests cover the app's side; the auth library's side was read in its source, not run. Check it in Task 13.
 - What the screen shows between returning from Discord and the sign-in finishing. From the code, the sign-in screen shows again for a moment.
+- Dragging in "Edit list" on a real touch screen. It was checked with a mouse; the tests cover the keyboard and the up and down buttons.
+- An edit made on one device appearing on another, on the deployed site. Tests cover it against the in-memory account.
+- One database test ("gives them a profile: named as on Discord, not approved, not an admin") failed once in a full run while Part B's plan was being built, and passed on three reruns and in every later run. Nothing in Part B touches the database. If it fails again, look at how the test waits for the in-process Postgres.
 - A real feature description on the Features page at phone width. The test sheets' descriptions are placeholders, so long text and wide tables were not seen there. The page uses the same description display as every ability row.
 - Whether D&D Beyond fills in a required level on species traits that are gained later. Every trait on the test sheets has none. The app leaves out a trait whose required level is above the character's.

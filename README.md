@@ -29,6 +29,18 @@ This repository contains the import, the sheet maths, the turn engine, the web a
 - **The device keeps its own copy** of everything, so the app opens and works without a connection. Changes are sent when one is available. Where two devices change the same thing, the later change wins.
 - **Signing out** removes the device's copy.
 
+## Editing a sheet
+
+The imported sheet is never changed. A player's edits are stored beside it and applied each time the sheet is built, so they survive a re-import.
+
+- **Edit** on an opened row changes one ability: when it is used, its limited uses, its tags, which views list it, its roll, and whether it is hidden. "Back to imported" removes every edit to it.
+- **Edit list** at the bottom of each view is for arranging: drag a row or use its up and down buttons, hide rows, restore hidden ones, and add an ability of your own.
+- Combat and Explore each keep their own order.
+- **Features** lists everything the sheet says the character has. None of it is put in Combat or Explore by the app: open a feature, tap Edit, and tick Combat or Explore. It then sits under "Always on" until you give it another timing.
+- The Features page has its own "Edit list" for ordering, hiding and restoring. It starts with the entries D&D Beyond hides on its own sheet already in "Hidden".
+- A feature that already has rows in play (Rage, Lucky) is edited through those rows; its own editor only hides it.
+- Edits sync like everything else, so a table admin can fix a player's sheet from their own device.
+
 ## Deploying
 
 The site is static and is built with `pnpm build` into `apps/web/dist`. It needs two values at build time, both public: `VITE_SUPABASE_URL` and `VITE_SUPABASE_KEY` (the project's publishable key). `apps/web/.env.example` lists them.
