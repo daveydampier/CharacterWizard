@@ -48,7 +48,7 @@ Facts measured in `fixtures/characters`, which the tests below rely on. An imple
 - A class feature's `classId` is the ID of the class or of the subclass that defines it. That, and not `isSubClassFeature`, tells the two apart.
 - `classFeatures` is not in level order. `displayOrder` orders features within a level on most sheets, not all.
 - D&D Beyond's `hideInSheet` marks one or two entries per character: Languages on all eight, Eldritch Invocation Options, and the second copy of Rage and of Innate Sorcery. The sheet lists those two twice; the copy with the action is not flagged.
-- Every background that has one grants its feature as a feat (`grantedFeats`), so no fixture produces a background feature. One fixture has no background at all.
+- Every background grants its feature as a feat (`grantedFeats`), so no fixture produces a background feature. One fixture (`danger`) has a custom background: its `background.definition` is null and its parts are under `background.customBackground`. This plan first said that fixture had no background; the whole-branch review corrected it.
 - Descriptions are placeholders, so tests check names, order and links, and write their own text where they need some.
 
 ## File structure
@@ -1830,4 +1830,18 @@ Part B's plan is revised after this merges. What this plan leaves for it, so tha
 - A feature's `hidden`, when unset, follows `hiddenOnSheet`. The "Hidden" drawer of the Features page therefore starts with the entries D&D Beyond hides, and Restore sets `hidden: false`.
 - `featureGroups` leaves out `hiddenOnSheet` entries itself today. In Part B that test moves into the edit layer.
 - An option whose parent is hidden is listed as one whose parent is missing. `featureGroups` already does this for `hiddenOnSheet` parents.
-- Part B's totals start from 948 tests in 42 files, not from the number in its current plan.
+- `Sheet.features` carries no hidden entries today. Part B's `applyEdits(sheet, edits)` takes a sheet, so for the "Hidden" drawer and Restore the sheet's shape must change to carry them.
+- The same option chosen under two parents gets `#2` by its position in the sheet's list, so the two keys swap if D&D Beyond reorders that list. If Part B's edits must survive that, number duplicates per parent.
+- "In play" can sit on an option and not on its parent (the Tiefling's "Fiendish Legacy Spells" has no play rows; its option does). Part B's editor "says which rows those are" and should read well in that case.
+- Part B's totals start from 973 tests in 42 files, not from the number in its current plan.
+
+## After the whole-branch review
+
+The finished branch was reviewed as a whole. It found no fault in the path from sheet to page for the eight fixtures, and two gaps for sheets the fixtures do not cover. Four commits fixed what it found, each with tests that fail without the fix, taking the suite from 948 to 973 tests:
+
+- A custom background's own feature was not read. It is now, from `background.customBackground`.
+- A species trait that names a required level above the character's is left out. No fixture has such a trait, so this guards a field that was read from the data's shape and never seen filled in.
+- An ID of 0 is not an ID; IDs that arrive as strings still mark subclass features; a name that is only spaces is left out.
+- A feature's options are in a group named after it, so that a screen reader says what they belong to.
+
+What was found and left is in `2026-11-18-milestone-3-deferred-findings.md`, under "The Features page".

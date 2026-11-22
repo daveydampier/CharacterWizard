@@ -94,6 +94,19 @@ Left, smallest first:
 - **A different account on the same device.** If a different account signs in on a device whose earlier session had ended, the earlier account's copy is removed from the device, including any changes it had not yet sent. The device cannot send them without that account's session, and refusing the second sign-in would need a screen state the design does not have. It takes a shared device, two Discord accounts, and unsent changes made after the first session ended. The spec says so (section 11).
 - **A fetched change that cannot be read back.** The character stays open and the player's next change is written over the fetched copy, as any later local change would be. Closing the character in the middle of play over a read error would be worse.
 
+## The Features page
+
+The Features page (plan `2026-11-21-features-page.md`) was reviewed task by task and once more as a whole. Found and left, smallest first. None blocks merging.
+
+- The same option chosen under two parents gets `#2` by its position in the sheet's list. Part B stores edits by key, so settle this in Part B's plan.
+- Two features with the same IDs both get the same play rows. No fixture has one; when it happens it is one entry listed twice.
+- An orphan option from a list the app does not know (the sheet has one for items) is shown among the feats.
+- A feature row's button says whether it is open but does not point at the text it opens. Ability rows have the same shape; change both together.
+- A group's heading is read twice by a screen reader (the section's label and its heading). Combat's groups have the same shape.
+- `featureLine` shows a level line for any feature that has a level. Only class features have one today.
+- A standard background whose feature name is only spaces is chosen over a custom background's feature, and then left out. It needs a malformed sheet.
+- A feature with no ID is keyed by its trimmed name, so a name that gains or loses a space at its ends keeps its key. Nothing stored a key before this, so no stored edit moved.
+
 ## Task 13: done
 
 The owner ran Task 13 on 2026-11-19, and the Part A pull request is merged.
@@ -120,3 +133,5 @@ What Task 13's steps got wrong, found with Supabase CLI 3.2.0. The plan and the 
 - Whether a successful fetch from the character service redirects. An unknown ID answers 403 directly; the import function now follows no redirects.
 - An offline start, end to end: sign in, wait more than an hour, turn on aeroplane mode, open the app. It should say the changes are waiting, not "Sign in again to sync", and sync by itself within about two minutes of the connection coming back, while the app is on screen (the auth library waits a minute after a renewal fails, then tries every 30 seconds). Tests cover the app's side; the auth library's side was read in its source, not run. Check it in Task 13.
 - What the screen shows between returning from Discord and the sign-in finishing. From the code, the sign-in screen shows again for a moment.
+- A real feature description on the Features page at phone width. The test sheets' descriptions are placeholders, so long text and wide tables were not seen there. The page uses the same description display as every ability row.
+- Whether D&D Beyond fills in a required level on species traits that are gained later. Every trait on the test sheets has none. The app leaves out a trait whose required level is above the character's.

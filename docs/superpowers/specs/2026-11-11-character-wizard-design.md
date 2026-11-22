@@ -318,17 +318,17 @@ interface Feature {
 |---|---|
 | A class feature whose required level is at most the character's level in that class | `class`, or `subclass` when the feature belongs to the subclass's own definition |
 | A feat | `feat` |
-| A species trait | `species` |
+| A species trait | `species`. A trait that names a required level above the character's level is left out |
 | An option (class, feat or species) | A feature with the origin of the feature it is attached to, and that feature's key in `parentKey` |
-| The background's own feature | `background`, and only when the background names a feature and grants no feats. A feat that a background grants is on the sheet's list of feats, and is listed there |
+| The background's own feature | `background`, and only when the background names a feature and grants no feats. A feat that a background grants is on the sheet's list of feats, and is listed there. A custom background has no definition of its own: its feature is read from the standard background it takes its features from, and it is called by the name the player gave it |
 
-A class feature carries the ID of the class or subclass that defines it, which is how the two are told apart here. Action rows do not carry it, which is why section 5.1 gives both the source `class`. An option whose parent is not listed takes its origin from the list it is in: `class` and the first class, `feat`, or `species`.
+A class feature carries the ID of the class or subclass that defines it, which is how the two are told apart here. Action rows do not carry it, which is why section 5.1 gives both the source `class`. An option whose parent is not listed takes its origin from the list it is in: `class` and the first class, `feat`, `species` or `background`. The sheet has other option lists (one for items); an orphan option in any other list is placed with the feats, so that nothing on the sheet is dropped.
 
 **Nothing is filtered by name:** every entry in those lists is a feature. The converter keeps no list of names to leave out, so bookkeeping entries (Ability Score Improvement, Size, Speed) are listed with the rest, and the player hides them (Part B).
 
 **What the sheet itself hides:** D&D Beyond marks some entries "hide in sheet" and does not show them on its own sheet. The converter keeps them and sets `hiddenOnSheet`; the Features page leaves them out, and from Part B they start in its "Hidden" drawer, where Restore brings one back. In the eight fixtures the flag marks one or two entries per character: Languages on every one, a container for options (Eldritch Invocation Options), and the second copy of a feature that the sheet lists twice. Rage and Innate Sorcery are each listed twice; the copy that carries the action is not flagged, and the other is. Following the flag is what stops those two from showing twice.
 
-**Feature key:** `feature:{entityTypeId}:{id}`, from D&D Beyond's own IDs. A feature with a name and no ID is keyed by a hash of its origin and name. Two features with the same key follow the rule for actions in section 5.1: the first keeps it and each later one gets `#2`, `#3` and so on. In the eight fixtures every feature has an ID and no two share a key.
+**Feature key:** `feature:{entityTypeId}:{id}`, from D&D Beyond's own IDs. An ID of 0 counts as no ID, because the sheet uses 0 for "none". A feature with a name and no ID is keyed by a hash of its origin and name. Two features with the same key follow the rule for actions in section 5.1: the first keeps it and each later one gets `#2`, `#3` and so on. In the eight fixtures every feature has an ID and no two share a key.
 
 **Description:** the entry's full description, or its short one where the full one is empty. Section 13 applies.
 
@@ -336,7 +336,7 @@ A class feature carries the ID of the class or subclass that defines it, which i
 
 **Order:** one group for each class in sheet order, then Feats, then the species, then the background. Within a class, features are ordered by level, then by the sheet's display order, then by their position on the sheet; subclass features sit among the class's own at their level. Feats and species traits keep the sheet's order. An option comes straight after the feature that offers it. An option whose parent is not listed goes to the end of the group for its kind, and so does one whose parent is another option or is hidden. `ddb-import` puts each list in this order, because the display order is D&D Beyond's. `packages/rules` makes the groups, puts options under their features and leaves out what is hidden; the page only draws the result.
 
-**Unknown shapes:** an entry with no name is left out. Any other missing or malformed field takes a default (no level, an empty description, no parent). A list that is missing or is not a list yields no features. Nothing in this section can stop a character from opening.
+**Unknown shapes:** an entry with no name, or a name that is only spaces, is left out. Any other missing or malformed field takes a default (no level, an empty description, no parent). A list that is missing or is not a list yields no features. Nothing in this section can stop a character from opening.
 
 **From Part B, features take edits.** A feature's key is used exactly as an ability key is: an `AbilityEdit` is stored under it, as an `edit` item.
 
@@ -558,7 +558,7 @@ Hide, order and edit work on any row, including the universal actions. The unive
 The third choice in the header switch. It answers "what does my character have?", where Combat and Explore answer "what can I do now?".
 
 - It lists every feature of section 5.5 that the sheet does not itself hide, in that section's groups and order. Each group has a heading: the class's name and level, "Feats", the species' name, the background's name. A group with nothing in it is not shown.
-- A row has the feature's name. A class or subclass feature also says where it comes from and at what level ("Warlock, level 2"; a subclass feature names the subclass). An option is indented under the feature that offers it.
+- A row has the feature's name. A class or subclass feature also says where it comes from and at what level ("Warlock, level 2"; a subclass feature names the subclass). An option is indented under the feature that offers it, in a group named after that feature, so that a screen reader says what it belongs to.
 - A feature that has rows in play carries the label "In play".
 - Tapping a row opens its description, as section 10.3 describes. A feature with no description says so.
 - There is no turn tracker, no resource chips and no Use button: nothing on this page is spent.
