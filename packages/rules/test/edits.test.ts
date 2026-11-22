@@ -377,6 +377,51 @@ describe('the editor\'s form', () => {
     expect(diffEdit(sheet, step, { ...form, tags: [...form.tags].reverse() })).toEqual({});
   });
 
+  it('does not care in which order the keys of uses and a roll come', () => {
+    /** The same value with every object's keys in reverse order; arrays keep their order. */
+    const reversed = <T>(value: T): T => {
+      if (Array.isArray(value)) return value.map(reversed) as T;
+      if (value !== null && typeof value === 'object') {
+        return Object.fromEntries(Object.entries(value).reverse().map(([k, v]) => [k, reversed(v)])) as T;
+      }
+      return value;
+    };
+    const sheet = sheetOf('danger');
+    const attack = sheet.abilities.find((a) => a.roll.kind === 'attack' && a.roll.damage.length > 0);
+    if (!attack) throw new Error('no attack');
+    const wind = named(sheet, 'Second Wind');
+    for (const ability of [attack, wind]) {
+      const form = editForm(sheet, ability);
+      expect(JSON.stringify(reversed(form.roll))).not.toBe(JSON.stringify(form.roll));
+      expect(diffEdit(sheet, ability, { ...form, uses: reversed(form.uses), roll: reversed(form.roll) })).toEqual({});
+    }
+  });
+
+  it('still counts a change in the order of damage parts', () => {
+    const sheet = sheetOf('danger');
+    const attack = sheet.abilities.find((a) => a.roll.kind === 'attack' && a.roll.damage.length > 0);
+    if (!attack || attack.roll.kind !== 'attack') throw new Error('no attack');
+    const parts = [{ dice: '1d8', type: 'slashing' }, { dice: '1d4', type: 'cold' }];
+    const base: Ability = { ...attack, roll: { ...attack.roll, damage: parts } };
+    const form = editForm(sheet, base);
+    const swapped = { ...attack.roll, damage: [...parts].reverse() };
+    expect(diffEdit(sheet, base, form)).toEqual({});
+    expect(diffEdit(sheet, base, { ...form, roll: swapped })).toEqual({ roll: swapped });
+  });
+
+  it('a hidden ability keeps its limited uses in the form, and hiding is all that is recorded', () => {
+    const sheet = sheetOf('danger');
+    const surge = named(sheet, 'Action Surge');
+    const edited = applyEdits(sheet, edits({ abilities: { [surge.key]: { hidden: true } } }));
+    const hiddenSurge = named(edited, 'Action Surge');
+    expect(edited.hidden.map((a) => a.key)).toContain(surge.key);
+    const form = editForm(edited, hiddenSurge);
+    expect(form.uses).toEqual({ max: 1, reset: 'short' });
+    expect(form.hidden).toBe(true);
+    expect(diffEdit(sheet, surge, form)).toEqual({ hidden: true });
+    expect(diffEdit(sheet, surge, { ...form, hidden: false })).toEqual({});
+  });
+
   it('never records uses for an ability that costs a spell slot', () => {
     const sheet = sheetOf('vlad');
     const hex = named(sheet, 'Hex');

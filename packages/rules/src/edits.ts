@@ -221,7 +221,22 @@ export function editForm(sheet: Sheet, ability: Ability): EditForm {
   };
 }
 
-const same = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
+/**
+ * True when two plain values hold the same content. The order of an object's keys does not
+ * matter; the order of an array's items does (two damage parts swapped are a different roll).
+ */
+function same(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (Array.isArray(a) || Array.isArray(b)) {
+    return Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((item, i) => same(item, b[i]));
+  }
+  if (a === null || b === null || typeof a !== 'object' || typeof b !== 'object') return false;
+  const left = a as Record<string, unknown>;
+  const right = b as Record<string, unknown>;
+  const keys = Object.keys(left).filter((k) => left[k] !== undefined);
+  const otherKeys = Object.keys(right).filter((k) => right[k] !== undefined);
+  return keys.length === otherKeys.length && keys.every((k) => Object.hasOwn(right, k) && same(left[k], right[k]));
+}
 const sameTags = (a: Tag[], b: Tag[]): boolean => same([...a].sort(), [...b].sort());
 
 /**
