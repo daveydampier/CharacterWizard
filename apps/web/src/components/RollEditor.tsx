@@ -66,12 +66,16 @@ export function RollEditor({ value, onChange }: Props) {
     </div>
   );
 
-  const number = (name: string, label: string, current: number, change: (n: number) => void): ReactNode =>
+  /**
+   * A number field. `signed` is for one that can be negative: an iPhone's numeric keypad has no
+   * minus sign, so such a field leaves the keyboard to the browser.
+   */
+  const number = (name: string, label: string, current: number, change: (n: number) => void, signed = false): ReactNode =>
     field(name, label, (fieldId) => (
       <input
         id={fieldId}
         type="number"
-        inputMode="numeric"
+        inputMode={signed ? undefined : 'numeric'}
         value={numberText(current)}
         onChange={(event) => change(numberFrom(event.target.value))}
         className={INPUT}
@@ -116,7 +120,7 @@ export function RollEditor({ value, onChange }: Props) {
 
       {value.kind === 'attack' ? (
         <>
-          {number('bonus', 'Attack bonus', value.bonus, (bonus) => onChange({ ...value, bonus }))}
+          {number('bonus', 'Attack bonus', value.bonus, (bonus) => onChange({ ...value, bonus }), true)}
           {damage(value)}
         </>
       ) : null}
@@ -142,7 +146,7 @@ export function RollEditor({ value, onChange }: Props) {
 
       {value.kind === 'dice' ? text('dice', 'Dice', value.dice, (dice) => onChange({ ...value, dice }), '2d6') : null}
 
-      {value.kind === 'check' ? number('bonus', 'Bonus', value.bonus, (bonus) => onChange({ ...value, bonus })) : null}
+      {value.kind === 'check' ? number('bonus', 'Bonus', value.bonus, (bonus) => onChange({ ...value, bonus }), true) : null}
     </div>
   );
 }

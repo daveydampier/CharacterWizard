@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
@@ -41,6 +41,17 @@ describe('RollEditor', () => {
     await userEvent.clear(field);
     if (text !== '') await userEvent.type(field, text);
   }
+
+  it('lets a phone type a minus sign in a bonus, and keeps the digit keypad for a DC', () => {
+    editing({ kind: 'attack', bonus: 5, damage: [], optionalDamage: [] });
+    expect(screen.getByLabelText('Attack bonus')).not.toHaveAttribute('inputmode', 'numeric');
+    cleanup();
+    editing({ kind: 'check', bonus: 3 });
+    expect(screen.getByLabelText('Bonus')).not.toHaveAttribute('inputmode', 'numeric');
+    cleanup();
+    editing({ kind: 'save', ability: 'dex', dc: 13, damage: [] });
+    expect(screen.getByLabelText('DC')).toHaveAttribute('inputmode', 'numeric');
+  });
 
   it('offers the kinds of roll, and an ability check only for a roll that is one', () => {
     editing({ kind: 'none' });
