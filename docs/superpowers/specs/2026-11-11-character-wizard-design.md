@@ -1,7 +1,7 @@
 # Character Wizard: design
 
 Date: 2026-11-11
-Status: approved in conversation, awaiting written review. Milestone 2 decisions added 2026-11-11 (sections 4, 5, 6, 8, 10, 12, 15 and 17). Milestone 3 decisions added 2026-11-18 (sections 2, 4, 5, 6, 7, 10, 11, 12, 13, 14, 15, 16 and 17). Details settled by the Part A reviews added 2026-11-19 (sections 5.2, 5.3, 10.5, 11 and 12). The Features page added 2026-11-21 (sections 2, 4, 5, 10, 13, 14, 15, 16 and 17), approved in conversation and awaiting written review.
+Status: approved in conversation, awaiting written review. Milestone 2 decisions added 2026-11-11 (sections 4, 5, 6, 8, 10, 12, 15 and 17). Milestone 3 decisions added 2026-11-18 (sections 2, 4, 5, 6, 7, 10, 11, 12, 13, 14, 15, 16 and 17). Details settled by the Part A reviews added 2026-11-19 (sections 5.2, 5.3, 10.5, 11 and 12). The Features page added 2026-11-21 (sections 2, 4, 5, 10, 13, 14, 15, 16 and 17), approved in conversation and awaiting written review. Details settled while Part B's plan was revised added 2026-11-22 (sections 5.3, 5.4, 5.5, 10.4 and 12), awaiting review.
 
 ## 1. Purpose
 
@@ -237,6 +237,8 @@ One IndexedDB database, `character-wizard`, behind an `AppStorage` interface. (`
 
 **Writes** go through one queue per database, so a delete waits for writes still in flight. Both the IndexedDB and the in-memory implementation store a copy of what they are given and return a copy.
 
+**Look and write in one step:** the storage can read one record and store, remove or keep it as a single operation, so that nothing else changes the record in between. The sync engine decides what to do with a fetched or a sent record this way, and play state and edits are stamped and written this way. Without it, a change the player made between a read and the write that followed was overwritten.
+
 Turn state is persisted, because phones discard background tabs when a player switches to D&D Beyond. The one-step undo snapshot is held in memory only.
 
 If IndexedDB is unavailable (private browsing, quota), the app says so and keeps working in memory.
@@ -284,7 +286,7 @@ interface CharacterEdits {
 - **Timing, tags, roll:** replace the imported value. Edited tags set `tagSource` to `user`.
 - **Uses:** `{ max, reset }` changes the pool the ability already spends from, or gives an ability with no cost a pool under its own key and makes Use spend from it. `'none'` removes the cost. Not offered for an ability that costs a spell slot.
 - **inCombat, inExplore:** override which views list the ability. Unset, Combat lists every timing except `long`, and Explore lists what section 10.2 says. An ability forced into Combat whose timing has no group there is listed under "Other". A feature follows a different rule when unset (section 5.5).
-- **hidden:** the ability leaves both views and is listed in `sheet.hidden`. A pool is not shown as a resource chip when at least one ability uses it and all of them are hidden.
+- **hidden:** the ability leaves both views and is listed in `sheet.hidden`. A pool is not shown as a resource chip when at least one ability uses it and none of them is listed: all are hidden, or are features in neither view (section 5.5). The editor still reads such a pool, so the uses are there when the ability is edited again.
 - **order:** within any group, abilities whose key is in the view's list come first, in list order; the rest follow in sheet order.
 - **Custom abilities** are converted to `Ability` records with source `custom` and appended. Editing one rewrites its `custom` item; hiding it or changing its views uses an `AbilityEdit` under its key, like any other ability. Its description is plain text and is escaped before display.
 - The sheet records which keys carry an edit, so a row can show "edited".
@@ -328,7 +330,7 @@ A class feature carries the ID of the class or subclass that defines it, which i
 
 **What the sheet itself hides:** D&D Beyond marks some entries "hide in sheet" and does not show them on its own sheet. The converter keeps them and sets `hiddenOnSheet`; the Features page leaves them out, and from Part B they start in its "Hidden" drawer, where Restore brings one back. In the eight fixtures the flag marks one or two entries per character: Languages on every one, a container for options (Eldritch Invocation Options), and the second copy of a feature that the sheet lists twice. Rage and Innate Sorcery are each listed twice; the copy that carries the action is not flagged, and the other is. Following the flag is what stops those two from showing twice.
 
-**Feature key:** `feature:{entityTypeId}:{id}`, from D&D Beyond's own IDs. An ID of 0 counts as no ID, because the sheet uses 0 for "none". A feature with a name and no ID is keyed by a hash of its origin and name. Two features with the same key follow the rule for actions in section 5.1: the first keeps it and each later one gets `#2`, `#3` and so on. In the eight fixtures every feature has an ID and no two share a key.
+**Feature key:** `feature:{entityTypeId}:{id}`, from D&D Beyond's own IDs. An ID of 0 counts as no ID, because the sheet uses 0 for "none". A feature with a name and no ID is keyed by a hash of its origin and name. An option's key also names the entry it is attached to: `feature:{entityTypeId}:{id}@{entityTypeId}:{id}`, the option's own IDs and then its parent's. The same option chosen under two features is two entries, and which is which must not depend on the order of the sheet's list. Two features with the same key follow the rule for actions in section 5.1: the first keeps it and each later one gets `#2`, `#3` and so on. In the eight fixtures every feature has an ID and no two share a key.
 
 **Description:** the entry's full description, or its short one where the full one is empty. Section 13 applies.
 
@@ -341,9 +343,9 @@ A class feature carries the ID of the class or subclass that defines it, which i
 **From Part B, features take edits.** A feature's key is used exactly as an ability key is: an `AbilityEdit` is stored under it, as an `edit` item.
 
 - **inCombat, inExplore:** for a feature, unset means not listed, whatever its timing and tags. The app never adds a feature to a play view; only the player's tick does. A feature ticked into a view is listed there as an ability built from it: the feature's key, name and description, the source that matches its origin (`class` for a subclass feature), timing `passive`, and no roll, cost or tags.
-- **Timing, uses, tags, roll:** apply to that ability as they do to any other. They have no effect on the Features page.
-- **hidden:** the feature leaves the Features page and both play views, and is listed in the Features page's "Hidden" drawer. Hiding a feature does not hide the abilities in its `playKeys`; those are hidden by their own keys. Unset, a feature is hidden when `hiddenOnSheet` is true and shown otherwise; Restore sets it to false.
-- **order.features:** as `order.combat`, within a group of the Features page. It orders a group's features; an option moves with its parent. An option whose parent is hidden is listed as one whose parent is missing.
+- **Timing, uses, tags, roll:** apply to that ability as they do to any other. They have no effect on the Features page, and none of them ticks a view. The row carries the label "edited" only when one of these four was changed: the tick alone is not a change to what the row says. Limited uses are a pool under the feature's key.
+- **hidden:** the feature leaves the Features page and both play views, and is listed in the Features page's "Hidden" drawer. A hidden feature that the player had ticked into a view is also listed in the views' own "Hidden" drawer, so that it can be restored from where it was hidden. Hiding a feature does not hide the abilities in its `playKeys`; those are hidden by their own keys. Unset, a feature is hidden when `hiddenOnSheet` is true and shown otherwise; Restore sets it to false. The choice is stored only where it differs from that, so hiding and restoring leaves no edit behind.
+- **order.features:** as `order.combat`, within a group of the Features page. It orders a group's features; an option keeps the sheet's order under its parent and moves with it. An option whose parent is hidden is listed as one whose parent is missing, and can then be moved like any other row.
 - **A feature with `playKeys`** can be hidden and moved, and is not offered the other fields: it is already in play as those abilities, which are edited where they are listed. The cost: a feature with several parts, only one of which has an ability (War Caster), cannot be added to a play view as a reminder of the rest. The player adds a custom ability for that.
 
 ## 6. Import flow
@@ -538,9 +540,9 @@ Hide, order and edit work on any row, including the universal actions. The unive
 
 **Features** (section 10.6) are edited and arranged the same way:
 
-- An opened feature shows "Edit". It opens the same editor. Both "Shown in" boxes start unticked and stay so until the player ticks one; changing a feature's timing or tags never ticks one. A feature starts as Passive.
-- A feature ticked into Combat or Explore is a row there like any other: it sits in the group for its timing, can be moved and hidden there, and gets pips and Use once it has limited uses.
-- The Features page has its own "Edit list", with Hide, the "Hidden" drawer, drag, "Move up" and "Move down" within a group, and its own order. It has no "Add an ability".
+- An opened feature shows "Edit". It opens the same editor, with "Shown in" first and one line under it saying that a feature is listed only when ticked. Both boxes start unticked and stay so until the player ticks one; changing a feature's timing or tags never ticks one. A feature starts as Passive.
+- A feature ticked into Combat or Explore is a row there like any other: it sits in the group for its timing, can be moved and hidden there, and gets pips and Use once it has limited uses. Hide on that row hides the feature everywhere, the Features page included; unticking "Shown in" takes it out of one view.
+- The Features page has its own "Edit list", with Hide, the "Hidden" drawer, drag, "Move up" and "Move down" within a group, and its own order. It has no "Add an ability". An option is listed under its feature with Edit and Hide, and is not moved by itself. When every feature is hidden the page says so and still offers "Edit list".
 - A feature that already has rows in play (section 5.5) offers only Hide in its editor, and says which rows those are.
 
 ### 10.5 Other screens
@@ -608,8 +610,8 @@ The third choice in the header switch. It answers "what does my character have?"
 
 - Every change is saved on the device first, marked dirty, and sent to the account in the background.
 - **Sending:** about two seconds after a change, and again when a connection returns. A record stops being dirty once the account has answered, whether it accepted the change or already held a newer one.
-- **Fetching:** at sign-in, when the app opens, when the player switches back to it, and every 30 seconds while it is on screen. The device asks for every character and item with a `rev` after the last one it saw. The account answers a page at a time, and a call that gets no answer within 20 seconds counts as no connection.
-- **Merging a fetched record:** it replaces the device's copy unless the device's copy is dirty and newer. If the character on screen changed, the screen updates. A change the player makes to what is spent while a fetch is running, or while its result is being read back, wins over what was fetched; a change to the turn alone does not count, because the turn never syncs.
+- **Fetching:** at sign-in, when the app opens, when the player switches back to it, and every 30 seconds while it is on screen. The device asks for every character and item with a `rev` after the last one it saw. The account answers a page at a time, and a call that gets no answer within 20 seconds counts as no connection. When a fetched character becomes live on the device (it arrives for the first time, or comes back after being deleted there), the device fetches items from the beginning, so that the character has every item it should.
+- **Merging a fetched record:** it replaces the device's copy unless the device's copy is dirty and newer. The look and the write are one storage step (section 5.3), so a change made on the device at that moment is not lost. After a fetch the open character's edits are read back from the device, which holds the newest copy of each. If the character on screen changed, the screen updates. A change the player makes to what is spent while a fetch is running, or while its result is being read back, wins over what was fetched; a change to the turn alone does not count, because the turn never syncs.
 - **What syncs:** characters, and the `play`, `edit`, `custom` and `order` items. Turn state does not.
 - **First sign-in on a device:** characters already on it are uploaded (section 5.3). Where the account already has the same character, the ordinary rule decides each record: the newer import, and whichever play state changed last. Where the device itself already holds the character under the account's ID, the two copies are merged the same way, record by record.
 
@@ -648,8 +650,8 @@ Each milestone is usable on its own and gets its own implementation plan.
 2. **Both views with turn and resource tracking**, stored on the device only. Includes the import Edge Function, which the browser needs to fetch a character, the Supabase project that hosts it, and the first deployment of the static site. No accounts, overlays, suggestions or usage events.
 3. **Accounts, saved characters and overlays** (edit, reorder, hide, add custom). Three pieces, each with its own pull request:
    - **Part A, accounts and syncing:** the version 2 device storage, the database and its access rules, Discord sign-in, approval and the Players screen, syncing, the table admin's "Table" section, and the import function's access check and limits. Usable on its own: characters are backed up and follow the player between devices. Merged 2026-11-19.
-   - **The Features page** (sections 5.5 and 10.6), read-only, with its own plan. It comes before Part B so that Part B's editor, hiding and arranging cover features from the start.
-   - **Part B, overlays:** the ability editor, "Edit list" with drag and drop, hiding, custom abilities, re-import with edits, and all of these for features, with the "Always on" group. Its plan is revised after the Features page merges.
+   - **The Features page** (sections 5.5 and 10.6), read-only, with its own plan. It comes before Part B so that Part B's editor, hiding and arranging cover features from the start. Merged 2026-11-22.
+   - **Part B, overlays:** the ability editor, "Edit list" with drag and drop, hiding, custom abilities, re-import with edits, and all of these for features, with the "Always on" group. Its plan was revised on 2026-11-22, after the Features page merged, and is `docs/superpowers/plans/2026-11-22-milestone-3-part-b-overlays.md`. It begins by closing two faults in the syncing that the Part A review left for it (sections 5.3 and 12).
 4. **Suggestions:** turn plans, situation chips, feedback and usage learning.
 5. **Offline support and install to home screen.**
 

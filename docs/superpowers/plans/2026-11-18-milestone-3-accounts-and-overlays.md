@@ -9280,6 +9280,8 @@ Stop here. With the owner's say-so, push the branch and open the Part A pull req
 
 # Part B: overlays
 
+> **Replaced on 2026-11-22. Do not build from the text below.** Part B's plan is now `2026-11-22-milestone-3-part-b-overlays.md`. Tasks 14 to 20 here were written before Part A's reviews changed the store and the sync engine and before the Features page existed: their code no longer applies, their test totals are wrong, and they know nothing of features. They are kept as the record of what was planned.
+
 Work on the branch `milestone-3-overlays`. Every Global Constraint above still applies.
 
 ---
