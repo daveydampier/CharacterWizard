@@ -10052,8 +10052,8 @@ The plan was executed on 2026-11-22, on the branch `milestone-3-overlays`, cut f
 
 - The task reviews found eleven faults in this plan's code. One round of nine commits fixed them, each with tests that fail without the fix, and a re-review confirmed each.
 - The whole-branch review found no path in ordinary use that loses a player's work, and asked for nine more changes. One wave of eight commits made them, and a re-review confirmed each.
-- The suite went from 1254 tests at the end of Task 13 to 1305.
+- The suite went from 1254 tests at the end of Task 13 to 1314.
 - Task 14's walk-through held on all 24 points at 375 by 812 against the in-memory account. A row was dragged with a mouse; nothing was tried with a finger.
-- One finding is open for the owner: the copy of a feature that D&D Beyond lists twice is named with a " 2" on its controls.
+- The last re-review left one finding: the copy of a feature that D&D Beyond lists twice was named with a " 2" on its controls. The owner asked for it to be fixed; one commit did, and a review confirmed it.
 
 So the code on the branch is not the code in this document's blocks. What changed, what was found and left, and what is not verified are in `2026-11-18-milestone-3-deferred-findings.md` under "Part B: editing and arranging", and the design document has the rules the reviews settled (sections 5.4, 8, 10.1, 10.3, 10.4 and 10.6).

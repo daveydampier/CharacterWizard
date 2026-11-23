@@ -115,9 +115,7 @@ The task reviews found eleven faults, all fixed with tests that fail without the
 
 The whole-branch review found no path in ordinary use that loses, duplicates or resurrects an edit, an order, a custom ability or what is spent. It asked for nine more changes, all made: "Add an ability" now offers "Shown in" and the new row appears in the view it was added from; one edit holds a shared pool's maximum; a custom ability must have a key of the player's own; nothing is written for a character the device no longer holds; the editor's title tells twins apart; a number in a feature's label stays with that feature; a negative bonus can be typed on a phone; and a weapon with charges is no longer offered "Limited uses", which would have rewritten its item's charges.
 
-One finding from the last re-review is open and waits for the owner's word:
-
-- **A feature the sheet lists twice.** D&D Beyond lists Rage and Innate Sorcery twice and hides one copy. Numbers in feature labels now follow the sheet's order, and the hidden copy comes first, so the copy the player sees is named "Rage (Barbarian, level 1) 2" on its controls and to a screen reader. The row's visible text is still "Rage". The fix is small: when numbering, put the copies the sheet itself hides after the others.
+The last re-review found one more fault, fixed at the owner's word with one commit and reviewed by itself: D&D Beyond lists Rage and Innate Sorcery twice and hides one copy, and with numbers in sheet order the copy the player sees was named "Rage (Barbarian, level 1) 2" on its controls and to a screen reader. A copy the sheet itself hides is now numbered after the others, so the one shown is "Rage (Barbarian, level 1)".
 
 Found and left. None blocks merging. The ones to pick up first are at the top.
 
@@ -177,6 +175,7 @@ Tests:
 - No test of the one-step write on the IndexedDB storage with two calls interleaved, nor that a fetch which starts again rewrites nothing, nor of a failed write of an edit, nor of an edit that clamps what is spent during a fetch.
 - Not pinned by a test: where "Always on" sits among the groups; a passive row with a cost keeping its Use button; an option with no parent named; a feature D&D Beyond hides that is ticked and not restored; a reload re-reading the Features page's order; the second order of two abilities on one pool; non-finite numbers in stored edits.
 - The test "ignores edits until the saved state has loaded" passes without the guard it names.
+- Feature labels: no test has three same-named features of which the sheet hides some, an option among them, or one whose parent is hidden. The test that runs over every fixture would fail, wrongly, on a real feature whose name ends in a space and a number.
 
 Size:
 
