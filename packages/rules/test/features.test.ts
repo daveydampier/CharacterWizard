@@ -255,6 +255,31 @@ describe('featureLabels', () => {
     expect(featureLabels(arrangeFeatures(source, new Set([first.key])), [first], source)).toEqual(expected);
   });
 
+  it('numbers the copy the sheet hides after the one it shows, however the player hides or arranges them', () => {
+    const c = character([
+      feature('Keen Nose', { key: 'feature:1:a', hiddenOnSheet: true }), feature('Keen Nose', { key: 'feature:1:b' }),
+    ]);
+    const [first, second] = c.features;
+    const expected = { 'feature:1:a': 'Keen Nose (Feats) 2', 'feature:1:b': 'Keen Nose (Feats)' };
+    expect(labelsOf(c)).toEqual(expected);
+    expect(labelsOf(c, [])).toEqual(expected);
+    expect(labelsOf(c, [first, second])).toEqual(expected);
+    const source = featureSource(c);
+    const moved = arrangeFeatures(source, new Set(), [second.key, first.key]);
+    expect(moved[0].items.map((item) => item.feature.key)).toEqual([second.key, first.key]);
+    expect(featureLabels(moved, [], source)).toEqual(expected);
+  });
+
+  it.each(SLUGS)('numbers a feature the sheet shows only after an earlier one it shows with the same label: %s', (slug) => {
+    const c = characterOf(slug);
+    const labels = labelsOf(c);
+    const shownLabels = c.features.filter((f) => !f.hiddenOnSheet).map((f) => labels[f.key]);
+    shownLabels.forEach((label, i) => {
+      const numbered = /^(.*) \d+$/.exec(label);
+      if (numbered) expect(shownLabels.slice(0, i)).toContain(numbered[1]);
+    });
+  });
+
   it('uses the class line for a class feature, and the heading for one with no level', () => {
     const c = character([
       feature('Tough Hide', { key: 'feature:1:a', origin: 'class', originName: 'Fighter', classIndex: 0, level: 3 }),

@@ -111,8 +111,8 @@ export function featureLine(f: Feature): string | null {
  * tells them apart: an option's parent ("Intelligence (Otherworldly Presence)"), a class or
  * subclass feature's line ("Weapon Mastery (Fighter, level 1)"), or else its group's heading
  * ("Weapon Mastery (Feats)"). Labels that are still the same are numbered, the later ones in the
- * sheet's own order: "X 2", "X 3". So a number names one feature, wherever the player moves it
- * and whichever twin is hidden.
+ * sheet's own order, with the copies the sheet itself hides after the others: "X 2", "X 3". So a
+ * number names one feature, wherever the player moves it and whichever twin is hidden.
  */
 export function featureLabels(page: FeatureGroup[], hidden: Feature[], source: FeatureSource): Record<string, string> {
   const listed = [...page.flatMap((g) => g.items.flatMap((item) => [item.feature, ...item.options])), ...hidden];
@@ -132,8 +132,9 @@ export function featureLabels(page: FeatureGroup[], hidden: Feature[], source: F
   const out: Record<string, string> = {};
   const used = new Set<string>();
   const shown = new Set(listed.map((f) => f.key));
-  // Sheet order first, whatever order the page and drawer list them in.
-  for (const f of [...source.list.filter((s) => shown.has(s.key)), ...listed]) {
+  // Sheet order, whatever order the page and drawer list them in; the copies the sheet hides last.
+  const inSheet = source.list.filter((s) => shown.has(s.key));
+  for (const f of [...inSheet.filter((s) => !s.hiddenOnSheet), ...inSheet.filter((s) => s.hiddenOnSheet), ...listed]) {
     if (f.key in out) continue;
     const extra = (count.get(f.name) ?? 0) > 1 ? telling(f) : null;
     const label = extra ? `${f.name} (${extra})` : f.name;

@@ -79,10 +79,9 @@ describe('Features view', () => {
 
   it('shows a feature the sheet lists twice once', async () => {
     await openFeatures('franny');
-    // The copy the sheet hides is in the "Hidden" drawer. It comes first on the sheet, so the one
-    // shown is named with its class line and numbered after it.
+    // The copy the sheet hides is in the "Hidden" drawer, so the one shown is named with its class line.
     expect(within(group('Barbarian 3')).getAllByRole('article', { name: /^Rage( \(|$)/ })).toHaveLength(1);
-    expect(within(row('Barbarian 3', 'Rage (Barbarian, level 1) 2')).getByText('In play')).toBeInTheDocument();
+    expect(within(row('Barbarian 3', 'Rage (Barbarian, level 1)')).getByText('In play')).toBeInTheDocument();
   });
 
   it('has nothing to use or spend, and no turn button', async () => {
