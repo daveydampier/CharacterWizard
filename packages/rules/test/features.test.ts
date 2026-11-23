@@ -1,7 +1,9 @@
 import { convertCharacter } from '@cw/ddb-import';
 import type { Character, Feature } from '@cw/model';
 import { describe, expect, it } from 'vitest';
-import { buildSheet, featureGroups, featureLine } from '../src/index';
+import {
+  arrangeFeatures, buildSheet, featureGroups, featureLabels, featureLine, featureSource, hiddenOnSheet,
+} from '../src/index';
 import { SLUGS, loadRaw, type Slug } from '../../../test-utils/fixtures';
 
 const characterOf = (slug: Slug): Character => convertCharacter(loadRaw(slug));
@@ -149,6 +151,36 @@ describe('featureGroups', () => {
   });
 });
 
+describe('arrangeFeatures', () => {
+  const source = featureSource(character([
+    feature('A'), feature('B'), feature('Of B', { parentKey: 'feature:1:B' }),
+    feature('Keen', { origin: 'species', originName: 'Gnome' }),
+  ]));
+  const outlineOf = (hidden: string[], order: string[] = []): [string, string[]][] =>
+    arrangeFeatures(source, new Set(hidden), order).map((g) => [
+      g.heading, g.items.flatMap((i) => [i.feature.name, ...i.options.map((o) => `${i.feature.name} > ${o.name}`)]),
+    ]);
+
+  it('lists everything when nothing is hidden, under the headings the character gave', () => {
+    expect(source.headings).toEqual({ feat: 'Feats', species: 'Gnome' });
+    expect(outlineOf([])).toEqual([['Feats', ['A', 'B', 'B > Of B']], ['Gnome', ['Keen']]]);
+  });
+
+  it('leaves out a group whose features are all hidden', () => {
+    expect(outlineOf(['feature:1:Keen'])).toEqual([['Feats', ['A', 'B', 'B > Of B']]]);
+  });
+
+  it('puts the named features first in their group, and an option whose parent is hidden last', () => {
+    expect(outlineOf([], ['feature:1:B', 'feature:1:Keen'])).toEqual([['Feats', ['B', 'B > Of B', 'A']], ['Gnome', ['Keen']]]);
+    expect(outlineOf(['feature:1:B'])).toEqual([['Feats', ['A', 'Of B']], ['Gnome', ['Keen']]]);
+    expect(outlineOf(['feature:1:B'], ['feature:1:Of B'])).toEqual([['Feats', ['Of B', 'A']], ['Gnome', ['Keen']]]);
+  });
+
+  it('knows which features the sheet itself hides', () => {
+    expect([...hiddenOnSheet([feature('Seen'), feature('Unseen', { hiddenOnSheet: true })])]).toEqual(['feature:1:Unseen']);
+  });
+});
+
 describe('featureLine', () => {
   it('says where a class or subclass feature comes from', () => {
     expect(featureLine(feature('Magical Cunning', { origin: 'class', originName: 'Warlock', classIndex: 0, level: 2 }))).toBe('Warlock, level 2');
@@ -169,5 +201,93 @@ describe('the sheet', () => {
     const sheet = buildSheet(c);
     expect(sheet.features).toEqual(featureGroups(c));
     expect(sheet.features.length).toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe('featureLabels', () => {
+  /** The labels with these features hidden; by default, the ones the sheet itself hides. */
+  const labelsOf = (c: Character, hidden: Feature[] = c.features.filter((f) => f.hiddenOnSheet)) => {
+    const source = featureSource(c);
+    return featureLabels(arrangeFeatures(source, new Set(hidden.map((f) => f.key))), hidden, source);
+  };
+  /** The labels that are not the plain name, in sheet order. */
+  const bracketed = (c: Character, labels: Record<string, string>): string[] =>
+    c.features.filter((f) => f.key in labels && labels[f.key] !== f.name).map((f) => labels[f.key]);
+
+  it('tells twins apart by parent, class line or heading, and leaves every other name alone', () => {
+    const c = characterOf('danger');
+    const labels = labelsOf(c);
+    expect(bracketed(c, labels)).toEqual([
+      'Weapon Mastery (Fighter, level 1)', '4: Weapon Mastery (Fighter, level 4)', 'Weapon Mastery (Feats)',
+      '4: Weapon Mastery (Feats)', 'Intelligence (Otherworldly Presence)', 'Intelligence (Fiendish Legacy Spells)',
+    ]);
+    expect(new Set(Object.values(labels)).size).toBe(Object.keys(labels).length);
+  });
+
+  it('labels every feature on the page and in the drawer, and nothing else', () => {
+    for (const slug of SLUGS) {
+      const c = characterOf(slug);
+      expect(Object.keys(labelsOf(c)).sort()).toEqual(c.features.map((f) => f.key).sort());
+    }
+  });
+
+  it('counts a twin in the drawer, so hiding one does not rename the other', () => {
+    const c = characterOf('danger');
+    const intelligence = c.features.filter((f) => f.name === 'Intelligence');
+    const labels = labelsOf(c, [...c.features.filter((f) => f.hiddenOnSheet), intelligence[0]]);
+    expect(intelligence.map((f) => labels[f.key])).toEqual(['Intelligence (Otherworldly Presence)', 'Intelligence (Fiendish Legacy Spells)']);
+  });
+
+  it('numbers twins that nothing else tells apart, the later ones in page order', () => {
+    const c = character([feature('Keen Nose', { key: 'feature:1:a' }), feature('Keen Nose', { key: 'feature:1:b' }), feature('Keen Nose', { key: 'feature:1:c' })]);
+    expect(Object.values(labelsOf(c, []))).toEqual(['Keen Nose (Feats)', 'Keen Nose (Feats) 2', 'Keen Nose (Feats) 3']);
+  });
+
+  it('keeps a number with its feature when the player moves one twin above the other, or hides one', () => {
+    const c = character([feature('Keen Nose', { key: 'feature:1:a' }), feature('Keen Nose', { key: 'feature:1:b' })]);
+    const source = featureSource(c);
+    const expected = { 'feature:1:a': 'Keen Nose (Feats)', 'feature:1:b': 'Keen Nose (Feats) 2' };
+    expect(featureLabels(arrangeFeatures(source, new Set()), [], source)).toEqual(expected);
+    const moved = arrangeFeatures(source, new Set(), ['feature:1:b', 'feature:1:a']);
+    expect(moved[0].items.map((item) => item.feature.key)).toEqual(['feature:1:b', 'feature:1:a']);
+    expect(featureLabels(moved, [], source)).toEqual(expected);
+    const [first] = c.features;
+    expect(featureLabels(arrangeFeatures(source, new Set([first.key])), [first], source)).toEqual(expected);
+  });
+
+  it('numbers the copy the sheet hides after the one it shows, however the player hides or arranges them', () => {
+    const c = character([
+      feature('Keen Nose', { key: 'feature:1:a', hiddenOnSheet: true }), feature('Keen Nose', { key: 'feature:1:b' }),
+    ]);
+    const [first, second] = c.features;
+    const expected = { 'feature:1:a': 'Keen Nose (Feats) 2', 'feature:1:b': 'Keen Nose (Feats)' };
+    expect(labelsOf(c)).toEqual(expected);
+    expect(labelsOf(c, [])).toEqual(expected);
+    expect(labelsOf(c, [first, second])).toEqual(expected);
+    const source = featureSource(c);
+    const moved = arrangeFeatures(source, new Set(), [second.key, first.key]);
+    expect(moved[0].items.map((item) => item.feature.key)).toEqual([second.key, first.key]);
+    expect(featureLabels(moved, [], source)).toEqual(expected);
+  });
+
+  it.each(SLUGS)('numbers a feature the sheet shows only after an earlier one it shows with the same label: %s', (slug) => {
+    const c = characterOf(slug);
+    const labels = labelsOf(c);
+    const shownLabels = c.features.filter((f) => !f.hiddenOnSheet).map((f) => labels[f.key]);
+    shownLabels.forEach((label, i) => {
+      const numbered = /^(.*) \d+$/.exec(label);
+      if (numbered) expect(shownLabels.slice(0, i)).toContain(numbered[1]);
+    });
+  });
+
+  it('uses the class line for a class feature, and the heading for one with no level', () => {
+    const c = character([
+      feature('Tough Hide', { key: 'feature:1:a', origin: 'class', originName: 'Fighter', classIndex: 0, level: 3 }),
+      feature('Tough Hide', { key: 'feature:1:b', origin: 'species', originName: 'Lizardfolk' }),
+      feature('Gills', { key: 'feature:1:c', origin: 'species', originName: 'Lizardfolk' }),
+    ], [{ name: 'Fighter', level: 5 }]);
+    expect(labelsOf(c, [])).toEqual({
+      'feature:1:a': 'Tough Hide (Fighter, level 3)', 'feature:1:b': 'Tough Hide (Lizardfolk)', 'feature:1:c': 'Gills',
+    });
   });
 });

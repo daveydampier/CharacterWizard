@@ -41,6 +41,9 @@ export interface StoredItem {
   dirty: boolean;
 }
 
+/** What to do with a record once it has been looked at: store this in its place, remove it, or leave it. */
+export type Update<T> = { put: T } | 'remove' | 'keep';
+
 /**
  * Where this device keeps its copy of everything. Named AppStorage because `Storage` is already
  * the browser's own type for localStorage. Every value is copied on the way in and on the way out.
@@ -49,6 +52,12 @@ export interface AppStorage {
   /** Every character, including deleted ones that the account has not yet been told about. */
   listCharacters(): Promise<StoredCharacter[]>;
   putCharacter(character: StoredCharacter): Promise<void>;
+  /**
+   * Looks at one character and stores, removes or keeps it, as one step: no other call can change
+   * the record in between. `decide` is given a copy, or null when the device holds none, and must
+   * answer at once, without waiting for anything. Removing a character removes its items.
+   */
+  updateCharacter(id: string, decide: (current: StoredCharacter | null) => Update<StoredCharacter>): Promise<void>;
   /** Removes the character and every item it has from this device. */
   removeCharacter(id: string): Promise<void>;
   /** Stores `character` in place of the one with `oldId`, moving that character's items to it. */
@@ -56,6 +65,14 @@ export interface AppStorage {
   /** One character's items, or every item when no ID is given. */
   listItems(characterId?: string): Promise<StoredItem[]>;
   putItem(item: StoredItem): Promise<void>;
+  /**
+   * The same for one item. `decide` is also given the item's character, or null when the device
+   * does not hold it.
+   */
+  updateItem(
+    characterId: string, kind: ItemKind, key: string,
+    decide: (current: StoredItem | null, character: StoredCharacter | null) => Update<StoredItem>,
+  ): Promise<void>;
   removeItem(characterId: string, kind: ItemKind, key: string): Promise<void>;
   /** A small named value: who is signed in, how far fetching has got. Null when never set. */
   getMeta(name: string): Promise<unknown>;

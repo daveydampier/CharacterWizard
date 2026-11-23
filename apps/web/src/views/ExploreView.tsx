@@ -5,8 +5,10 @@ import { AbilityRow } from '../components/AbilityRow';
 import { ConcentrationBanner } from '../components/ConcentrationBanner';
 import { NotesList } from '../components/NotesList';
 import { ResourceChips } from '../components/ResourceChips';
+import { useAbilityEdit } from '../components/useAbilityEdit';
 import { useAbilityUse } from '../components/useAbilityUse';
 import { useStore } from '../store';
+import { EditList } from './EditList';
 
 /** One skill or saving throw: a name, a d20 roll and any notes that belong to it. */
 interface CheckRow {
@@ -87,7 +89,10 @@ export function ExploreView({ sheet }: { sheet: Sheet }) {
   const rest = useStore((s) => s.rest);
   const endConcentration = useStore((s) => s.endConcentration);
   const { request, slotSheet } = useAbilityUse('explore');
+  const { edit, editor } = useAbilityEdit();
   const [query, setQuery] = useState('');
+  /** True while the player is arranging the list instead of playing from it. */
+  const [arranging, setArranging] = useState(false);
   const needle = query.trim().toLowerCase();
   const matches = (text: string): boolean => needle === '' || text.toLowerCase().includes(needle);
 
@@ -102,6 +107,8 @@ export function ExploreView({ sheet }: { sheet: Sheet }) {
   const shownAbilities = abilities.filter((a) => matches(a.name));
   const nothing = shownSkills.length + shownSaves.length + shownAbilities.length === 0;
 
+  if (arranging) return <EditList view="explore" sheet={sheet} onDone={() => setArranging(false)} />;
+
   let abilityList: ReactNode = null;
   if (shownAbilities.length > 0) {
     abilityList = shownAbilities.map((ability) => (
@@ -113,6 +120,7 @@ export function ExploreView({ sheet }: { sheet: Sheet }) {
         mode="explore"
         onUse={request}
         onAdjust={(pool, delta) => adjust(pool.key, delta)}
+        onEdit={edit}
       />
     ));
   } else if (needle === '') {
@@ -160,7 +168,16 @@ export function ExploreView({ sheet }: { sheet: Sheet }) {
         </button>
       </div>
 
+      <button
+        type="button"
+        onClick={() => setArranging(true)}
+        className="mt-4 min-h-11 w-full rounded-lg border border-slate-400 px-3 py-2 font-medium"
+      >
+        Edit list
+      </button>
+
       {slotSheet}
+      {editor}
     </div>
   );
 }

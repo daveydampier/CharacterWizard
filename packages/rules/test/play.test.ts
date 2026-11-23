@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { convertCharacter } from '@cw/ddb-import';
 import type { Ability, PlayState } from '@cw/model';
 import {
-  PACT_KEY, adjustPool, applyUse, availability, buildSheet, clampState, concentrationName, costLabel, emptyPlayState,
+  PACT_KEY, adjustPool, applyUse, availability, buildSheet, clampState, concentrationName, costKind, costLabel, emptyPlayState,
   endConcentration, pools, remaining, rest, slotKey, startTurn, togglePill, useSummary, type Sheet,
 } from '../src/index';
 import { SLUGS, loadRaw, type Slug } from '../../../test-utils/fixtures';
@@ -337,6 +337,52 @@ describe('costLabel', () => {
     expect(costLabel(find(maya, 'Scorching Ray'), maya, emptyPlayState())).toBe('1 charge of Shepherds Staff, 1 left');
     const vlad = sheetOf('vlad');
     expect(costLabel(find(vlad, 'Eldritch Blast'), vlad, emptyPlayState())).toBeNull();
+  });
+});
+
+describe('costKind', () => {
+  it('names the kind of slot the same way the cost label does', () => {
+    const vlad = sheetOf('vlad');
+    expect(costKind(find(vlad, 'Misty Step', 'slot'), vlad)).toBe('pact slot');
+    const minkis = sheetOf('minkis');
+    expect(costKind(find(minkis, 'Chromatic Orb'), minkis)).toBe('spell slot');
+  });
+
+  it('names a free cast, limited uses and a charge of something else, without the number left', () => {
+    const vlad = sheetOf('vlad');
+    expect(costKind(find(vlad, 'Misty Step', 'uses'), vlad)).toBe('free cast');
+    const danger = sheetOf('danger');
+    expect(costKind(find(danger, 'Second Wind'), danger)).toBe('limited uses');
+    const maya = sheetOf('maya');
+    expect(costKind(find(maya, 'Scorching Ray'), maya)).toBe('1 charge of Shepherds Staff');
+  });
+
+  it('is null for an ability with no cost, and for one whose pool is not on the sheet', () => {
+    const vlad = sheetOf('vlad');
+    const blast = find(vlad, 'Eldritch Blast');
+    expect(costKind(blast, vlad)).toBeNull();
+    expect(costKind({ ...blast, cost: { kind: 'uses', resourceKey: 'gone' } }, vlad)).toBeNull();
+  });
+
+  it('does not change as uses are spent', () => {
+    const danger = sheetOf('danger');
+    const wind = find(danger, 'Second Wind');
+    const spent = applyUse(wind, danger, emptyPlayState());
+    expect(costLabel(wind, danger, spent)).not.toBe(costLabel(wind, danger, emptyPlayState()));
+    expect(costKind(wind, danger)).toBe('limited uses');
+  });
+
+  it.each(SLUGS)('is the part of the cost label before the number left: %s', (slug) => {
+    const sheet = sheetOf(slug);
+    for (const a of [...sheet.abilities, ...sheet.universal]) {
+      const label = costLabel(a, sheet, emptyPlayState());
+      const kind = costKind(a, sheet);
+      if (kind === null || label === null) expect(label, a.name).toBe(kind);
+      else if (a.cost.kind === 'slot') expect(label, a.name).toBe(kind);
+      // A feature's own uses have always been labelled with the number alone.
+      else if (kind === 'limited uses') expect(label, a.name).toMatch(/^\d+ left$/);
+      else expect(label.replace(/, \d+ left$/, ''), a.name).toBe(kind);
+    }
   });
 });
 

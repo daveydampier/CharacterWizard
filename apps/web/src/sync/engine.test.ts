@@ -33,6 +33,38 @@ function table(): MemoryServer {
 const device = (server: MemoryServer, userId: string, storage: AppStorage = memoryStorage()) =>
   ({ storage, remote: server.remote({ userId }) });
 
+/**
+ * A storage on which `change` is made once, just before the first write that a sync makes to
+ * `target` lands: the worst moment for a tap. `target` is a character's ID or an item's key.
+ */
+function changedBeforeWrite(inner: AppStorage, target: string, change: () => Promise<void>): AppStorage {
+  let done = false;
+  const first = async (id: string): Promise<void> => {
+    if (done || id !== target) return;
+    done = true;
+    await change();
+  };
+  return {
+    ...inner,
+    async putCharacter(value) {
+      await first(value.id);
+      return inner.putCharacter(value);
+    },
+    async updateCharacter(id, decide) {
+      await first(id);
+      return inner.updateCharacter(id, decide);
+    },
+    async putItem(value) {
+      await first(value.key);
+      return inner.putItem(value);
+    },
+    async updateItem(characterId, kind, key, decide) {
+      await first(key);
+      return inner.updateItem(characterId, kind, key, decide);
+    },
+  };
+}
+
 describe('characterId', () => {
   it('is the same wherever the same account imports the same character', () => {
     expect(characterId('42', ANN)).toBe('ddb-42-user-ann');
@@ -249,6 +281,116 @@ describe('fetching', () => {
     await pull(dee);
     expect((await ann.storage.listCharacters()).map((c) => c.id)).toEqual(['a1']);
     expect((await dee.storage.listCharacters()).map((c) => [c.id, c.ownerId]).sort()).toEqual([['a1', ANN], ['b1', BEN]]);
+  });
+});
+
+describe('a character that arrives after its items', () => {
+  it('fetches the items from the beginning when the character arrives a round later', async () => {
+    const server = table();
+    const ann = device(server, ANN);
+    await ann.storage.putCharacter(character('c1'));
+    await ann.storage.putItem(item('c1', 'play', 'state'));
+    await syncOnce(ann);
+    const inner = server.remote({ userId: DEE });
+    let cutShort = true;
+    const dm = {
+      storage: memoryStorage(),
+      remote: { ...inner, pullCharacters: async (after: number) => (cutShort ? [] : inner.pullCharacters(after)) },
+    };
+    // The first fetch is cut short before any character arrives. The items are fetched and left out.
+    expect(await pull(dm)).toEqual(new Set());
+    cutShort = false;
+    expect(await pull(dm)).toEqual(new Set(['c1']));
+    expect((await dm.storage.listItems('c1')).map((i) => [i.kind, i.dirty])).toEqual([['play', false]]);
+  });
+
+  it('fetches the items again when a character deleted on this device comes back', async () => {
+    const server = table();
+    const phone = device(server, ANN);
+    const tablet = device(server, ANN);
+    await phone.storage.putCharacter(character('c1'));
+    await phone.storage.putItem(item('c1', 'edit', 'spell:1'));
+    await syncOnce(phone);
+    await syncOnce(tablet);
+    // Deleted on the tablet and not yet sent: its items are gone from the tablet.
+    await tablet.storage.removeCharacter('c1');
+    await tablet.storage.putCharacter(character('c1', { deleted: true, rawJson: null, updatedAt: T2 }));
+    // Re-imported on the phone later than that.
+    await phone.storage.putCharacter(character('c1', { updatedAt: T3, importedAt: T3 }));
+    await syncOnce(phone);
+    await syncOnce(tablet);
+    expect((await tablet.storage.listCharacters())[0]).toMatchObject({ id: 'c1', deleted: false });
+    expect((await tablet.storage.listItems('c1')).map((i) => i.key)).toEqual(['spell:1']);
+  });
+
+  it('reports no change to a character it already holds when the items are fetched again', async () => {
+    const server = table();
+    const ann = device(server, ANN);
+    const dm = device(server, DEE);
+    await ann.storage.putCharacter(character('c1'));
+    await ann.storage.putItem(item('c1', 'play', 'state'));
+    await syncOnce(ann);
+    await syncOnce(dm);
+    await ann.storage.putCharacter(character('c2', { ddbId: '43' }));
+    await syncOnce(ann);
+    expect(await pull(dm)).toEqual(new Set(['c2']));
+    expect((await dm.storage.listItems('c1'))[0]).toMatchObject({ data: { value: 1 }, dirty: false });
+  });
+});
+
+describe('a change made while a sync is writing', () => {
+  it('keeps a change to an item made just before the fetched copy would have replaced it', async () => {
+    const server = table();
+    const phone = device(server, ANN);
+    const inner = memoryStorage();
+    await phone.storage.putCharacter(character('c1'));
+    await phone.storage.putItem(item('c1', 'edit', 'spell:1'));
+    await syncOnce(phone);
+    await syncOnce(device(server, ANN, inner));
+    await phone.storage.putItem(item('c1', 'edit', 'spell:1', { data: { from: 'phone' }, updatedAt: T2 }));
+    await syncOnce(phone);
+    const tablet = device(server, ANN, changedBeforeWrite(inner, 'spell:1', () =>
+      inner.putItem(item('c1', 'edit', 'spell:1', { data: { from: 'tablet' }, updatedAt: T3 }))));
+    await syncOnce(tablet);
+    expect((await inner.listItems('c1'))[0].data).toEqual({ from: 'tablet' });
+    await syncOnce(phone);
+    expect((await phone.storage.listItems('c1'))[0].data).toEqual({ from: 'tablet' });
+  });
+
+  it('does not mark an item as sent when it changed just before it would have been marked', async () => {
+    const server = table();
+    const inner = memoryStorage();
+    await inner.putCharacter(character('c1'));
+    await inner.putItem(item('c1', 'edit', 'spell:1'));
+    const tablet = device(server, ANN, changedBeforeWrite(inner, 'spell:1', () =>
+      inner.putItem(item('c1', 'edit', 'spell:1', { data: { value: 2 }, updatedAt: T2 }))));
+    await push(tablet);
+    expect((await inner.listItems('c1'))[0]).toMatchObject({ data: { value: 2 }, updatedAt: T2, dirty: true });
+  });
+
+  it('keeps a re-import made just before the fetched character would have replaced it', async () => {
+    const server = table();
+    const phone = device(server, ANN);
+    const inner = memoryStorage();
+    await phone.storage.putCharacter(character('c1'));
+    await syncOnce(phone);
+    await syncOnce(device(server, ANN, inner));
+    await phone.storage.putCharacter(character('c1', { name: 'Phone', updatedAt: T2, importedAt: T2 }));
+    await syncOnce(phone);
+    const tablet = device(server, ANN, changedBeforeWrite(inner, 'c1', () =>
+      inner.putCharacter(character('c1', { name: 'Tablet', updatedAt: T3, importedAt: T3 }))));
+    await pull(tablet);
+    expect((await inner.listCharacters())[0]).toMatchObject({ name: 'Tablet', dirty: true });
+  });
+
+  it('does not mark a character as sent when it changed just before it would have been marked', async () => {
+    const server = table();
+    const inner = memoryStorage();
+    await inner.putCharacter(character('c1'));
+    const tablet = device(server, ANN, changedBeforeWrite(inner, 'c1', () =>
+      inner.putCharacter(character('c1', { name: 'Again', updatedAt: T2, importedAt: T2 }))));
+    await push(tablet);
+    expect((await inner.listCharacters())[0]).toMatchObject({ name: 'Again', updatedAt: T2, dirty: true });
   });
 });
 

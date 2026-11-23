@@ -1,5 +1,5 @@
 import type { PushResult, Remote, RemoteCharacter, RemoteItem } from '../remote/types';
-import { SYNCED_KINDS, type AppStorage, type StoredCharacter, type StoredItem, type SyncedKind } from '../storage';
+import { SYNCED_KINDS, type AppStorage, type StoredCharacter, type SyncedKind } from '../storage';
 
 const CURSOR_CHARACTERS = 'cursor:characters';
 const CURSOR_ITEMS = 'cursor:items';
@@ -84,60 +84,62 @@ function fromRemote(row: RemoteCharacter): StoredCharacter {
 /**
  * Fetches everything changed in the account since the last fetch and merges it into this device.
  * A fetched record replaces the device's copy unless the device's copy is dirty and newer.
+ * Each record is looked at and written in one storage step.
  */
 export async function pull({ storage, remote }: SyncDeps): Promise<Set<string>> {
   const changed = new Set<string>();
 
-  const characterCursor = await cursor(storage, CURSOR_CHARACTERS);
-  const characters = await remote.pullCharacters(characterCursor);
-  const local = new Map((await storage.listCharacters()).map((c) => [c.id, c]));
+  const characters = await remote.pullCharacters(await cursor(storage, CURSOR_CHARACTERS));
+  if (characters.length > 0) {
+    // A character that becomes live on this device needs every item it has, and the item cursor
+    // may already be past them. The cursor goes back before anything is stored, so that a round
+    // cut short after this point still fetches the items from the beginning.
+    const held = new Set((await storage.listCharacters()).filter((c) => !c.deleted).map((c) => c.id));
+    if (characters.some((row) => !row.deleted && !held.has(row.id))) await storage.setMeta(CURSOR_ITEMS, 0);
+  }
   for (const row of characters) {
-    const mine = local.get(row.id);
-    if (mine?.dirty && later(mine.updatedAt, row.updatedAt)) {
-      if (row.deleted && !mine.deleted) {
-        // The account deleted it and threw away its items; this device has since brought it back.
-        for (const item of await storage.listItems(row.id)) {
-          if (isSynced(item.kind)) await storage.putItem({ ...item, dirty: true });
-        }
+    const found = { revived: false };
+    // Looked at and written in one step, so a change made on this device in between is not lost.
+    await storage.updateCharacter(row.id, (mine) => {
+      if (mine?.dirty && later(mine.updatedAt, row.updatedAt)) {
+        found.revived = row.deleted && !mine.deleted;
+        return 'keep';
       }
-      continue;
-    }
-    if (row.deleted) {
-      if (mine) {
-        await storage.removeCharacter(row.id);
-        local.delete(row.id);
+      if (row.deleted) {
+        if (!mine) return 'keep';
         changed.add(row.id);
+        return 'remove';
       }
-      continue;
+      if (!mine || mine.updatedAt !== row.updatedAt || mine.deleted) changed.add(row.id);
+      return { put: fromRemote(row) };
+    });
+    if (found.revived) {
+      // The account deleted it and threw away its items; this device has since brought it back.
+      for (const item of await storage.listItems(row.id)) {
+        if (!isSynced(item.kind)) continue;
+        await storage.updateItem(item.characterId, item.kind, item.key, (now) => (now ? { put: { ...now, dirty: true } } : 'keep'));
+      }
     }
-    if (!mine || mine.updatedAt !== row.updatedAt || mine.deleted) changed.add(row.id);
-    const stored = fromRemote(row);
-    await storage.putCharacter(stored);
-    local.set(row.id, stored);
   }
   if (characters.length > 0) await storage.setMeta(CURSOR_CHARACTERS, characters[characters.length - 1].rev);
 
-  const itemCursor = await cursor(storage, CURSOR_ITEMS);
-  const items = await remote.pullItems(itemCursor);
-  const localItems = new Map<string, StoredItem>();
-  const idOf = (i: { characterId: string; kind: string; key: string }): string => JSON.stringify([i.characterId, i.kind, i.key]);
-  for (const item of await storage.listItems()) localItems.set(idOf(item), item);
+  const items = await remote.pullItems(await cursor(storage, CURSOR_ITEMS));
   for (const row of items) {
-    const character = local.get(row.characterId);
-    // An item for a character this device does not hold (deleted here, or not fetched) is left out.
-    if (!character || character.deleted) continue;
-    const mine = localItems.get(idOf(row));
-    if (mine?.dirty && later(mine.updatedAt, row.updatedAt)) continue;
-    if (row.deleted) {
-      if (mine) {
-        await storage.removeItem(row.characterId, row.kind, row.key);
+    await storage.updateItem(row.characterId, row.kind, row.key, (mine, character) => {
+      // An item for a character this device does not hold (deleted here, or not fetched) is left out.
+      if (!character || character.deleted) return 'keep';
+      if (mine?.dirty && later(mine.updatedAt, row.updatedAt)) return 'keep';
+      if (row.deleted) {
+        if (!mine) return 'keep';
         changed.add(row.characterId);
+        return 'remove';
       }
-      continue;
-    }
-    if (!mine || mine.updatedAt !== row.updatedAt) changed.add(row.characterId);
-    const { rev: _rev, ...rest } = row satisfies RemoteItem;
-    await storage.putItem({ ...rest, dirty: false });
+      // Already held as fetched: a fetch that starts again from the beginning rewrites nothing.
+      if (mine && !mine.dirty && mine.updatedAt === row.updatedAt) return 'keep';
+      if (!mine || mine.updatedAt !== row.updatedAt) changed.add(row.characterId);
+      const { rev: _rev, ...rest } = row satisfies RemoteItem;
+      return { put: { ...rest, dirty: false } };
+    });
   }
   if (items.length > 0) await storage.setMeta(CURSOR_ITEMS, items[items.length - 1].rev);
 
@@ -159,10 +161,10 @@ export async function push({ storage, remote }: SyncDeps): Promise<PushResult['r
     rejected.push(...result.rejected);
     // Over the limit: it stays dirty and is offered again once there is room.
     if (result.rejected.some((r) => r.reason === 'limit')) continue;
-    const now = (await storage.listCharacters()).find((c) => c.id === sent.id);
-    if (!now || now.updatedAt !== sent.updatedAt) continue;
-    if (now.deleted) await storage.removeCharacter(now.id);
-    else await storage.putCharacter({ ...now, dirty: false });
+    await storage.updateCharacter(sent.id, (now) => {
+      if (!now || now.updatedAt !== sent.updatedAt) return 'keep';
+      return now.deleted ? 'remove' : { put: { ...now, dirty: false } };
+    });
   }
 
   // Items wait for their character: the account skips an item whose character it does not have.
@@ -172,12 +174,11 @@ export async function push({ storage, remote }: SyncDeps): Promise<PushResult['r
   );
   if (dirtyItems.length > 0) {
     await remote.pushItems(dirtyItems.map(({ dirty: _dirty, ...row }) => ({ ...row, kind: row.kind as SyncedKind })));
-    const after = new Map((await storage.listItems()).map((i) => [JSON.stringify([i.characterId, i.kind, i.key]), i]));
     for (const sent of dirtyItems) {
-      const now = after.get(JSON.stringify([sent.characterId, sent.kind, sent.key]));
-      if (!now || now.updatedAt !== sent.updatedAt) continue;
-      if (now.deleted) await storage.removeItem(now.characterId, now.kind, now.key);
-      else await storage.putItem({ ...now, dirty: false });
+      await storage.updateItem(sent.characterId, sent.kind, sent.key, (now) => {
+        if (!now || now.updatedAt !== sent.updatedAt) return 'keep';
+        return now.deleted ? 'remove' : { put: { ...now, dirty: false } };
+      });
     }
   }
   return rejected;

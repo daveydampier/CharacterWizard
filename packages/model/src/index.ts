@@ -35,13 +35,16 @@ export type SkillName = keyof typeof SKILL_ABILITY;
 export const SKILLS = Object.keys(SKILL_ABILITY) as SkillName[];
 
 /** 'free' = usable without an Action, Bonus Action or Reaction. 'long' = a minute or more. */
-export type Timing = 'action' | 'bonus' | 'reaction' | 'free' | 'passive' | 'long' | 'unknown';
+export const TIMINGS = ['action', 'bonus', 'reaction', 'free', 'passive', 'long', 'unknown'] as const;
+export type Timing = (typeof TIMINGS)[number];
 
-export type Tag =
-  | 'damage' | 'healing' | 'buff' | 'debuff' | 'control'
-  | 'movement' | 'defence' | 'utility' | 'social';
+export const TAGS = [
+  'damage', 'healing', 'buff', 'debuff', 'control', 'movement', 'defence', 'utility', 'social',
+] as const;
+export type Tag = (typeof TAGS)[number];
 
-export type ResetType = 'short' | 'long' | 'never' | 'unknown';
+export const RESET_TYPES = ['short', 'long', 'never', 'unknown'] as const;
+export type ResetType = (typeof RESET_TYPES)[number];
 export type ProficiencyLevel = 'none' | 'half' | 'proficient' | 'expertise';
 
 /** One D&D Beyond modifier row that is currently in effect. */
@@ -174,7 +177,8 @@ export interface SkillCustom {
 export interface Feature {
   /**
    * `feature:{entityTypeId}:{id}`. Stable across re-imports. A feature with no ID has a key of the
-   * form `feature:anon-{hash}`; a second feature with the same key gets `#2` added.
+   * form `feature:anon-{hash}`. An option's key ends `@{entityTypeId}:{id}` of the entry it is
+   * attached to. A second feature with the same key gets `#2` added.
    */
   key: string;
   name: string;
@@ -267,4 +271,58 @@ export interface PlayState {
   /** Key of the ability being concentrated on. */
   concentrationKey: string | null;
   turn: TurnState;
+}
+
+/** The two views. Each keeps its own order of abilities. */
+export type ViewName = 'combat' | 'explore';
+
+/** A list the player can put in order: the two views, and the Features page. */
+export type OrderName = ViewName | 'features';
+
+/** A limited-use pool as the player sets it: how many, and when they come back. */
+export interface UsesEdit {
+  max: number;
+  reset: ResetType;
+}
+
+/**
+ * A player's changes to one ability, stored beside the imported sheet and applied each time the
+ * sheet is built. An absent field means "as imported". A feature takes the same edit under its
+ * own key: for a feature, `inCombat` and `inExplore` are what put it in a view at all.
+ */
+export interface AbilityEdit {
+  timing?: Timing;
+  /** 'none' removes the ability's limited uses. */
+  uses?: UsesEdit | 'none';
+  tags?: Tag[];
+  roll?: Roll;
+  inCombat?: boolean;
+  inExplore?: boolean;
+  /** Absent, an ability is shown, and a feature is hidden only if D&D Beyond hides it on its own sheet. */
+  hidden?: boolean;
+}
+
+/** An ability the player added. Its key is `own:<uuid>`. */
+export interface CustomAbility {
+  key: string;
+  name: string;
+  timing: Timing;
+  roll: Roll;
+  cost:
+    | { kind: 'none' }
+    | { kind: 'uses'; max: number; reset: ResetType }
+    | { kind: 'slot'; minLevel: number };
+  tags: Tag[];
+  concentration: boolean;
+  /** Plain text, escaped before it is shown. */
+  description: string;
+}
+
+/** Everything a player has changed on one character. */
+export interface CharacterEdits {
+  /** By ability key. */
+  abilities: Record<string, AbilityEdit>;
+  custom: CustomAbility[];
+  /** Keys in the order the player arranged them: ability keys for each view, feature keys for the Features page. */
+  order: Record<OrderName, string[]>;
 }

@@ -57,7 +57,7 @@ describe('Explore view', () => {
   it('lists out of combat abilities and has no turn tracker', async () => {
     await openExplore('vlad');
     expect(labels('Out of combat abilities')).toEqual([
-      'Charm Person', 'Misty Step', 'Phantasmal Force', 'Misty Step', 'Magical Cunning',
+      'Charm Person', 'Misty Step (pact slot)', 'Phantasmal Force', 'Misty Step (free cast)', 'Magical Cunning',
     ]);
     expect(screen.queryByRole('button', { name: 'Start my turn' })).toBeNull();
     expect(screen.queryByRole('button', { name: /^Action: / })).toBeNull();

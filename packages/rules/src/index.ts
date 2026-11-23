@@ -13,4 +13,5 @@ export * from './features';
 export * from './sheet';
 export * from './play';
 export * from './normalise';
+export * from './edits';
 export * from './views';

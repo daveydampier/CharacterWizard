@@ -1,11 +1,11 @@
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import type { Slug } from '../../../../test-utils/fixtures';
 import { CharacterScreen } from '../screens/Character';
 import { memoryStorage } from '../storage';
 import { useStore } from '../store';
-import { seed, testRemote } from '../test/helpers';
+import { ability, seed, testRemote } from '../test/helpers';
 
 async function openCombat(slug: Slug) {
   const record = await seed(slug);
@@ -24,11 +24,25 @@ describe('Combat view', () => {
     const names = (group: string) =>
       within(screen.getByRole('region', { name: group })).getAllByRole('article').map((a) => a.getAttribute('aria-label'));
     expect(names('Action').slice(0, 4)).toEqual(['Wurms Claw - Sword', 'Wurms Claw - Axe', 'Wurms Claw - Hammer', 'Unarmed Strike']);
-    expect(names('Bonus Action')).toEqual(['Hex', 'Misty Step', 'Misty Step', 'Pact of the Blade: Conjure', 'Pact of the Blade: Bond']);
-    expect(names('Reaction')).toEqual(['Hellish Rebuke', 'Hellish Rebuke']);
+    expect(names('Bonus Action')).toEqual([
+      'Hex', 'Misty Step (pact slot)', 'Misty Step (free cast)', 'Pact of the Blade: Conjure', 'Pact of the Blade: Bond',
+    ]);
+    expect(names('Reaction')).toEqual(['Hellish Rebuke (pact slot)', 'Hellish Rebuke (free cast)']);
     expect(screen.getByText('No action needed (7)')).toBeInTheDocument();
     expect(screen.getByText('Anyone can do this')).toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'Other' })).toBeNull();
+  });
+
+  it('lists passive abilities under "Always on", with no Use button on one that costs nothing', async () => {
+    await openCombat('vlad');
+    expect(screen.queryByText(/^Always on/)).toBeNull();
+    act(() => useStore.getState().setEdit(ability('Unarmed Strike').key, { timing: 'passive' }));
+    await userEvent.click(await screen.findByText('Always on (1)'));
+    expect(within(row('Unarmed Strike')).queryByRole('button', { name: 'Use Unarmed Strike' })).toBeNull();
+    expect(screen.getByText('No action needed (7)')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Edit list' }));
+    const section = screen.getByRole('region', { name: 'Always on' });
+    expect(within(section).getByRole('button', { name: 'Hide Unarmed Strike' })).toBeInTheDocument();
   });
 
   it('uses an ability: spends the pill and the slot, shows concentration and offers undo', async () => {
@@ -44,7 +58,8 @@ describe('Combat view', () => {
     expect(use('Arms of Hadar')).toBeDisabled();
     expect(row('Arms of Hadar')).toHaveTextContent('You already spent a spell slot this turn.');
     expect(use('Eldritch Blast')).toBeEnabled();
-    expect(use('Misty Step', 0)).toBeDisabled();
+    expect(use('Misty Step (pact slot)')).toBeDisabled();
+    expect(use('Misty Step (free cast)')).toBeDisabled();
 
     await userEvent.click(screen.getByRole('button', { name: 'Undo' }));
     expect(pill('Bonus Action')).toHaveAttribute('aria-pressed', 'false');

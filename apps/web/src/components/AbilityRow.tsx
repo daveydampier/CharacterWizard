@@ -3,6 +3,7 @@ import { availability, costLabel, pools, remaining, rollLine, type Pool, type Sh
 import { useState } from 'react';
 import { Description } from './Description';
 import { Pips } from './Pips';
+import { rowLabel } from './rowLabel';
 
 interface Props {
   ability: Ability;
@@ -11,9 +12,11 @@ interface Props {
   mode: ViewMode;
   onUse: (ability: Ability) => void;
   onAdjust: (pool: Pool, delta: number) => void;
+  /** When given, the opened row offers "Edit". */
+  onEdit?: (ability: Ability) => void;
 }
 
-/** The small labels after the name: what it costs and what kind of ability it is. */
+/** The small labels after the name: what it costs, what kind of ability it is, and whether the player changed it. */
 function labels(ability: Ability, sheet: Sheet, state: PlayState): string[] {
   const out: string[] = [];
   const cost = costLabel(ability, sheet, state);
@@ -22,20 +25,22 @@ function labels(ability: Ability, sheet: Sheet, state: PlayState): string[] {
   if (ability.ritual) out.push('ritual');
   if (ability.timing === 'long') out.push('takes a minute or more');
   out.push(...ability.tags);
+  if (sheet.edited.includes(ability.key)) out.push('edited');
   return out;
 }
 
 /** One ability: name, labels, roll line, notes, a Use button, and the description on tap. */
-export function AbilityRow({ ability, sheet, state, mode, onUse, onAdjust }: Props) {
+export function AbilityRow({ ability, sheet, state, mode, onUse, onAdjust, onEdit }: Props) {
   const [open, setOpen] = useState(false);
   const a = availability(ability, sheet, state, mode);
   const line = rollLine(ability.roll);
   const pool = ability.poolKey ? pools(sheet).find((p) => p.key === ability.poolKey) : undefined;
   const blocked = a.hasUse && !a.canUse;
   const meta = labels(ability, sheet, state);
+  const label = rowLabel(ability, sheet);
 
   return (
-    <article aria-label={ability.name} className="border-t border-slate-200 py-2">
+    <article aria-label={label} className="border-t border-slate-200 py-2">
       <div className="flex items-start gap-2">
         <button
           type="button"
@@ -53,7 +58,7 @@ export function AbilityRow({ ability, sheet, state, mode, onUse, onAdjust }: Pro
         {a.hasUse ? (
           <button
             type="button"
-            aria-label={`Use ${ability.name}`}
+            aria-label={`Use ${label}`}
             disabled={!a.canUse}
             onClick={() => onUse(ability)}
             className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-slate-400 px-3 py-1.5 text-sm font-medium disabled:border-slate-200 disabled:text-slate-400"
@@ -68,7 +73,21 @@ export function AbilityRow({ ability, sheet, state, mode, onUse, onAdjust }: Pro
           <Pips pool={pool} left={remaining(pool, state)} onAdjust={(delta) => onAdjust(pool, delta)} />
         </div>
       ) : null}
-      {open ? <div className="mt-2 rounded-lg bg-slate-100 p-2"><Description html={ability.description} /></div> : null}
+      {open ? (
+        <div className="mt-2 rounded-lg bg-slate-100 p-2">
+          <Description html={ability.description} />
+          {onEdit ? (
+            <button
+              type="button"
+              aria-label={`Edit ${label}`}
+              onClick={() => onEdit(ability)}
+              className="mt-2 inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-slate-400 bg-white px-3 py-1.5 text-sm font-medium"
+            >
+              Edit
+            </button>
+          ) : null}
+        </div>
+      ) : null}
     </article>
   );
 }

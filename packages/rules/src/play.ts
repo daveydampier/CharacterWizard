@@ -44,6 +44,15 @@ export function pools(sheet: Sheet): Pool[] {
   return out;
 }
 
+/**
+ * Every pool the play state may hold a spent count for: those shown, and those that are not
+ * shown because nothing listed spends them (section 5.4). What is spent from one that is not
+ * shown is kept, so that hiding and restoring an ability is not a free refill.
+ */
+function trackedPools(sheet: Sheet): Pool[] {
+  return [...pools(sheet), ...sheet.unshownResources.map((r): Pool => ({ ...r, kind: 'uses' }))];
+}
+
 export function remaining(pool: Pool, state: PlayState): number {
   return Math.max(0, pool.max - (state.spent[pool.key] ?? 0));
 }
@@ -156,7 +165,7 @@ export function startTurn(state: PlayState): PlayState {
  */
 export function rest(kind: 'short' | 'long', sheet: Sheet, state: PlayState): PlayState {
   const spent = { ...state.spent };
-  for (const pool of pools(sheet)) {
+  for (const pool of trackedPools(sheet)) {
     if (pool.reset === 'short' || (kind === 'long' && pool.reset === 'long')) delete spent[pool.key];
   }
   return { spent, concentrationKey: kind === 'long' ? null : state.concentrationKey, turn: freshTurn() };
@@ -179,10 +188,13 @@ export function endConcentration(state: PlayState): PlayState {
   return { ...state, concentrationKey: null };
 }
 
-/** After a re-import: clamp to the new maximums, forget pools and concentration that no longer exist. */
+/**
+ * After a re-import or an edit: clamp to the new maximums, forget pools and concentration that no
+ * longer exist. A pool that is not shown still exists, and keeps what was spent from it.
+ */
 export function clampState(state: PlayState, sheet: Sheet): PlayState {
   const spent: Record<string, number> = {};
-  for (const pool of pools(sheet)) {
+  for (const pool of trackedPools(sheet)) {
     const value = Math.min(pool.max, Math.max(0, Math.floor(state.spent[pool.key] ?? 0)));
     if (value > 0) spent[pool.key] = value;
   }
@@ -190,20 +202,38 @@ export function clampState(state: PlayState, sheet: Sheet): PlayState {
   return { spent, concentrationKey: concentrating ? state.concentrationKey : null, turn: { ...state.turn } };
 }
 
-/** The short label that tells two rows with the same name apart: "pact slot", "free cast, 3 left". */
-export function costLabel(ability: Ability, sheet: Sheet, state: PlayState): string | null {
+/** The pool an ability's Use spends from. Undefined when it costs no uses or the pool is not on the sheet. */
+function usesPool(ability: Ability, sheet: Sheet): Pool | undefined {
+  if (ability.cost.kind !== 'uses') return undefined;
+  const key = ability.cost.resourceKey;
+  return pools(sheet).find((p) => p.key === key);
+}
+
+/**
+ * What kind of cost an ability has, in words that do not change as uses are spent: "pact slot",
+ * "free cast", "limited uses", "1 charge of Shepherds Staff". Null when it costs nothing.
+ */
+export function costKind(ability: Ability, sheet: Sheet): string | null {
   if (ability.cost.kind === 'slot') {
     return sheet.pactSlots && Object.keys(sheet.slots).length === 0 ? 'pact slot' : 'spell slot';
   }
-  if (ability.cost.kind === 'uses') {
-    const key = ability.cost.resourceKey;
-    const pool = pools(sheet).find((p) => p.key === key);
-    if (!pool) return null;
-    const left = `${remaining(pool, state)} left`;
-    if (key !== ability.key) return `1 charge of ${pool.name}, ${left}`;
-    return ability.source === 'spell' ? `free cast, ${left}` : left;
-  }
-  return null;
+  // A hidden ability's pool may not be shown, but what kind of cost it has is still what it was.
+  const key = ability.cost.kind === 'uses' ? ability.cost.resourceKey : null;
+  const unshown = sheet.unshownResources.find((r) => r.key === key);
+  const pool = usesPool(ability, sheet) ?? (unshown ? { ...unshown, kind: 'uses' as const } : undefined);
+  if (!pool) return null;
+  if (pool.key !== ability.key) return `1 charge of ${pool.name}`;
+  return ability.source === 'spell' ? 'free cast' : 'limited uses';
+}
+
+/** The short label that tells two rows with the same name apart: "pact slot", "free cast, 3 left". */
+export function costLabel(ability: Ability, sheet: Sheet, state: PlayState): string | null {
+  const kind = costKind(ability, sheet);
+  const pool = usesPool(ability, sheet);
+  if (kind === null || !pool) return kind;
+  const left = `${remaining(pool, state)} left`;
+  // A feature's own uses need no words: the number says it.
+  return pool.key === ability.key && ability.source !== 'spell' ? left : `${kind}, ${left}`;
 }
 
 /** "Used Hex. Spent: Bonus Action, a pact slot." Compares the state before and after a Use. */
